@@ -1,0 +1,25 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        x:Class="MyProjectBase.Views.ConfirmWindow"
+        mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="250"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="ConfirmWindow"
+        
+        Width="400"
+        Height="250"
+
+        WindowStartupLocation="CenterOwner">
+        
+    <Border Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="8" Padding="20">
+        <StackPanel VerticalAlignment="Center" Spacing="20">
+            <TextBlock x:Name="MessageText" Foreground="White" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
+        
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="0,10,0,0">
+                <Button Content="Yes" Click="BtnYes_Click" Background="SkyBlue" Foreground="Black" FontWeight="Bold" Padding="20,10" />
+                <Button Content="No" Click="BtnNo_Click" Background="SkyBlue" Foreground="Black" FontWeight="Bold" Padding="20,10" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

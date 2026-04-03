@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyProjectBase.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="MyProjectBase.Views.CollectionView"
+        x:DataType="vm:CollectionViewModel"
+        x:Name="Collection">
+    
+    <Design.DataContext>
+        <vm:CollectionViewModel/>
+    </Design.DataContext>
+    
+    <DockPanel Margin="20">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+            <Button Content="Load JSON" Command="{Binding LoadJsonCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Add Shoe" Command="{Binding AddShoeCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Edit Shoe" Command="{Binding OpenEditPanelCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Delete Shoe" Command="{Binding DeleteSelectedShoeCommand}" Background="SkyBlue" Foreground="Black" />
+            
+            <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" Background="SkyBlue" Foreground="Black" />
+            
+            <TextBlock Text="{Binding Message}" 
+                       Foreground="SkyBlue" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center" 
+                       Margin="15,0,0,0" />
+            
+        </StackPanel>
+        
+        <!--pannel du form add-->
+        <StackPanel DockPanel.Dock="Right" Width="250" Margin="15,0,0,0" Spacing="10" IsVisible="{Binding IsAddPanelVisible}">
+            <TextBlock Text="Add a shoe" Foreground="White" FontWeight="Bold" />
+            <TextBlock Text="Brand" Foreground="White" />
+            <TextBox Text="{Binding NewBrand, Mode=TwoWay}" />
+            <TextBlock Text="Model" Foreground="White" />
+            <TextBox Text="{Binding NewModel, Mode=TwoWay}" />
+            <TextBlock Text="Image" Foreground="White" />
+            <ComboBox ItemsSource="{Binding AvailableImages}" SelectedItem="{Binding NewImagePath, Mode=TwoWay}" />
+            <Button Content="Save" Command="{Binding ConfirmAddCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Cancel" Command="{Binding CancelAddCommand}" Background="SkyBlue" Foreground="Black" />
+        </StackPanel>
+        
+        <!--pannel du form edit-->
+        <StackPanel DockPanel.Dock="Right" Width="250" Margin="15,0,0,0" Spacing="10" IsVisible="{Binding IsEditPanelVisible}">
+            <TextBlock Text="Edit shoe" Foreground="White" FontWeight="Bold" />
+            <TextBlock Text="Brand" Foreground="White" />
+            <TextBox Text="{Binding EditBrand, Mode=TwoWay}" />
+            <TextBlock Text="Model" Foreground="White" />
+            <TextBox Text="{Binding EditModel, Mode=TwoWay}" />
+            <TextBlock Text="Image" Foreground="White" />
+            <ComboBox ItemsSource="{Binding AvailableImages}" SelectedItem="{Binding EditImagePath, Mode=TwoWay}" />
+            <Button Content="Save" Command="{Binding ConfirmEditCommand}" Background="SkyBlue" Foreground="Black" />
+            <Button Content="Cancel" Command="{Binding CancelEditCommand}" Background="SkyBlue" Foreground="Black" />
+        </StackPanel>
+
+        <Border Background="Black" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3">
+            <ScrollViewer>
+                <ListBox x:Name="Shoes" 
+                         ItemsSource="{Binding MyObservableShoes}" 
+                         SelectedItem="{Binding SelectedShoe}"
+                         ScrollViewer.VerticalScrollBarVisibility="Visible"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
+                                <Grid ColumnDefinitions="*,*,*">
+                                    
+                                    <Panel>
+                                        <Image Margin="20" Height="250" Width="400" 
+                                               Stretch="UniformToFill"
+                                               Source="{Binding Picture}" />
+                                    </Panel>
+                                    
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <!--<TextBlock Text="{Binding Id, StringFormat=I : {0}}" Foreground="White"/>-->
+                                        <TextBlock Text="{Binding Brand, StringFormat=Brand : {0}}" Foreground="White"/>
+                                        <TextBlock Text="{Binding Model, StringFormat=Model : {0}}" Foreground="White"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Content="Action"
+                                            Command="{Binding DataContext.FromParentCommand, ElementName=Collection}"
+                                            CommandParameter="{Binding Id}"
+                                            Background="SkyBlue" Foreground="Black" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</UserControl>

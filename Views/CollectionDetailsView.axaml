@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyProjectBase.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="MyProjectBase.Views.CollectionDetailsView"
+             x:DataType="vm:CollectionDetailsViewModel"> 
+    
+    <Design.DataContext>
+        <vm:CollectionDetailsViewModel/>
+    </Design.DataContext>
+    
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <Border Background="Black" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="10" Padding="20" Margin="20">
+            <StackPanel Orientation="Horizontal" Spacing="20">
+                <Image Height="550" Width="750" Stretch="Uniform"  Source="{Binding MyShoe.Picture}" />
+                <Border Width="2" Background="#D2B48C" CornerRadius="1" />
+                <StackPanel Orientation="Vertical" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="25">
+                    <TextBlock Text="Sneaker Details" Foreground="SkyBlue" FontSize="28" FontWeight="Bold"  />
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Brand" Foreground="Gray" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding MyShoe.Brand}" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                    </StackPanel>
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="Model" Foreground="Gray" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding MyShoe.Model}" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

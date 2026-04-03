@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AvaloniaProject">
+    <option name="projectPerEditor">
+      <map>
+        <entry key="App.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/Collection.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/CollectionDetailsView.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/CollectionView.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/ConfirmWindow.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/FirstPageView.axaml" value="MyProjectBase.csproj" />
+        <entry key="Views/MainWindow.axaml" value="MyProjectBase.csproj" />
+      </map>
+    </option>
+  </component>
+</project>

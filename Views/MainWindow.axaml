@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyProjectBase.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="MyProjectBase.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        x:Name="Main"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="MyProjectBase"
+        Background="Black">
+    
+    <Window.DataContext>
+        <vm:MainWindowViewModel/>
+    </Window.DataContext>
+    
+    <Grid RowDefinitions="80,*">
+        <Border Grid.Row="0" Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
+            
+            <TextBlock
+                Text="Collection de Sneakers" 
+                Foreground="SkyBlue" 
+                FontSize="24" 
+                FontWeight="Bold" 
+                HorizontalAlignment="Center" 
+                VerticalAlignment="Center" />
+            
+        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="150,*" >
+            <Border Grid.Column="0" Grid.Row="0" Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
+                <StackPanel HorizontalAlignment="Center">
+                    <Button Background="SkyBlue" Foreground="Black" Command="{Binding BackToMainCommand}" HorizontalAlignment="Left"> Main </Button>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Grid.Row="0" Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
+                <TransitioningContentControl Content="{Binding CurrentPage}" />
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
