@@ -15,14 +15,14 @@ namespace MyProjectBase.Services
             ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
         });
         
-        //private const string BaseUrl = "http://185.157.245.38:8080/json";
-        private const string BaseUrl = "http://localhost:5226/json";//POUR TEST MOI
+        private const string BaseUrl = "http://185.157.245.38:8080/json";
+        //private const string BaseUrl = "http://localhost:5226/json";//POUR TEST MOI
         
 
         internal async Task<List<Shoe>> GetShoesAsync()
         {
-            //const string url = $"{BaseUrl}?FileName=MyShoess.json";
-            const string url = $"{BaseUrl}?fileName=MyShoess.json";//POUR TEST MOI
+            const string url = $"{BaseUrl}?FileName=MyShoess.json";
+            //const string url = $"{BaseUrl}?fileName=MyShoess.json";//POUR TEST MOI
 
             using var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return new List<Shoe>();
