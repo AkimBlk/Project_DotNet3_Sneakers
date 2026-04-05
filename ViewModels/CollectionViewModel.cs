@@ -164,13 +164,14 @@ public partial class CollectionViewModel : ViewModelBase
         }
     }
     
+
+    
     [RelayCommand]
     private async Task ImportCsvAsync()
     {
-        
         bool isConfirmed = await ConfirmWindow.ShowAsync("Sure import CSV ?");
         if (!isConfirmed) return;
-        
+    
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var topLevel = TopLevel.GetTopLevel(desktop.MainWindow);
@@ -179,18 +180,19 @@ public partial class CollectionViewModel : ViewModelBase
                 var csvService = new CsvServices(topLevel);
 
                 var importedShoes = await csvService.LoadDataAsync();
+            
+                MyGlobals.MyShoes.Clear();
+                MyObservableShoes.Clear(); 
                 
-                if (importedShoes.Count > 0)
+                foreach (var shoe in importedShoes)
                 {
-                    foreach (var shoe in importedShoes)
-                    {
-                        MyGlobals.MyShoes.Add(shoe);
-                        //MyObservableShoes.Add(shoe);
-                    }
-                    await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
-                    
-                    Message = "| Import CSV ok, reload JSON !";
+                    MyGlobals.MyShoes.Add(shoe);
+                    //MyObservableShoes.Add(shoe);
                 }
+
+                await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
+            
+                Message = "| Import CSV ok, reload JSON !";
             }
         }
     }
@@ -256,13 +258,15 @@ public partial class CollectionViewModel : ViewModelBase
                 return;
             }
             
+            string deletedInfo = $"{SelectedShoe.Brand} {SelectedShoe.Model}";
+            
             var shoeToRemove = MyGlobals.MyShoes.FirstOrDefault(shoe => shoe.Id == SelectedShoe.Id);
             MyGlobals.MyShoes.Remove(shoeToRemove);
             
             await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
             SelectedShoe = null;
             
-            Message = "| Delete success, reload JSON !";
+            Message = $"| Deleted : {deletedInfo}, reload JSON !";
         } else {
             Message = "| Select a sneaker to delete";
             return;

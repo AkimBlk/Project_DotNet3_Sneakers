@@ -18,13 +18,7 @@
     <Grid RowDefinitions="80,*">
         <Border Grid.Row="0" Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
             
-            <TextBlock
-                Text="Collection de Sneakers" 
-                Foreground="SkyBlue" 
-                FontSize="24" 
-                FontWeight="Bold" 
-                HorizontalAlignment="Center" 
-                VerticalAlignment="Center" />
+            <TextBlock Text="Collection de Sneakers | Interface version 1.0" Foreground="SkyBlue" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
             
         </Border>
         <Grid Grid.Row="1" ColumnDefinitions="150,*" >

@@ -22,11 +22,7 @@
             <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Background="SkyBlue" Foreground="Black" />
             <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" Background="SkyBlue" Foreground="Black" />
             
-            <TextBlock Text="{Binding Message}" 
-                       Foreground="SkyBlue" 
-                       FontWeight="Bold" 
-                       VerticalAlignment="Center" 
-                       Margin="15,0,0,0" />
+            <TextBlock Text="{Binding Message}" Foreground="SkyBlue" FontWeight="Bold" VerticalAlignment="Center" Margin="15,0,0,0" />
             
         </StackPanel>
         
@@ -90,6 +86,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                
             </ScrollViewer>
         </Border>
     </DockPanel>
