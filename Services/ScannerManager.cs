@@ -1,74 +1,91 @@
-﻿using System;
-using System.Collections;
-using System.IO;
 using System.IO.Ports;
 using System.Linq;
 
 namespace MyProjectBase.Services;
 
-public class ScannerManager
+public interface IScannerManager : IDisposable
 {
+    event EventHandler<string>? CodeReceived;
+    bool IsConnected { get; }
+    ServiceResult OpenPort();
+    ServiceResult ClosePort();
+}
+
+public sealed class ScannerManager : IScannerManager
+{
+    private readonly IAppLogger _logger;
     private SerialPort? _serialPort;
-    private string? _portDetected;
     private string _buffer = string.Empty;
 
-    public QueueBuffer SerialBuffer { get; } = new();
+    public event EventHandler<string>? CodeReceived;
 
     public bool IsConnected => _serialPort is { IsOpen: true };
 
-    public void OpenPort()
+    public ScannerManager(IAppLogger logger)
     {
-        ClosePort();
-        _portDetected = DetectPort();
-
-        if (string.IsNullOrWhiteSpace(_portDetected))
-        {
-            throw new InvalidOperationException("Aucun scanner série détecté.");
-        }
-
-        _serialPort = new SerialPort
-        {
-            BaudRate = 9600,
-            PortName = _portDetected,
-            Parity = Parity.None,
-            DataBits = 8,
-            StopBits = StopBits.One,
-            Handshake = Handshake.None,
-            ReadTimeout = 10000,
-            WriteTimeout = 10000
-        };
-
-        _serialPort.DataReceived += DataHandler;
-        _serialPort.Open();
+        _logger = logger;
     }
 
-    public void ClosePort()
+    public ServiceResult OpenPort()
     {
-        if (_serialPort == null)
-            return;
+        ClosePort();
+
+        var port = DetectPort();
+        if (string.IsNullOrWhiteSpace(port))
+            return ServiceResult.Fail("No serial scanner detected. Check USB and Linux permissions for /dev/tty*.");
 
         try
         {
-            if (_serialPort.IsOpen)
+            _serialPort = new SerialPort(port)
             {
-                _serialPort.DataReceived -= DataHandler;
-                _serialPort.Close();
-            }
+                BaudRate = 9600,
+                Parity = Parity.None,
+                DataBits = 8,
+                StopBits = StopBits.One,
+                Handshake = Handshake.None,
+                ReadTimeout = 3000,
+                WriteTimeout = 3000,
+                NewLine = "\n"
+            };
 
-            _serialPort.Dispose();
+            _serialPort.DataReceived += DataHandler;
+            _serialPort.ErrorReceived += ErrorHandler;
+            _serialPort.Open();
+
+            return ServiceResult.Ok($"Scanner connected on {port}.");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.Error(ex, "Serial port permission denied.");
+            DisposePort();
+            return ServiceResult.Fail("Serial port access denied. On Linux, add the user to the dialout/uucp group.");
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Erreur fermeture port: {ex.Message}", ex);
-        }
-        finally
-        {
-            _serialPort = null;
-            _buffer = string.Empty;
+            _logger.Error(ex, "Scanner connection failed.");
+            DisposePort();
+            return ServiceResult.Fail($"Scanner connection failed: {ex.Message}");
         }
     }
 
-    private string? DetectPort()
+    public ServiceResult ClosePort()
+    {
+        try
+        {
+            DisposePort();
+            _buffer = string.Empty;
+            return ServiceResult.Ok("Scanner disconnected.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Scanner disconnection failed.");
+            return ServiceResult.Fail($"Scanner disconnection failed: {ex.Message}");
+        }
+    }
+
+    public void Dispose() => ClosePort();
+
+    private static string? DetectPort()
     {
         var ports = SerialPort.GetPortNames()
             .OrderBy(p => p)
@@ -77,100 +94,104 @@ public class ScannerManager
         var preferredPort = ports.FirstOrDefault(p =>
             p.Contains("ttyACM", StringComparison.OrdinalIgnoreCase) ||
             p.Contains("ttyUSB", StringComparison.OrdinalIgnoreCase) ||
+            p.Contains("cu.usb", StringComparison.OrdinalIgnoreCase) ||
             p.Contains("COM", StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(preferredPort))
             return preferredPort;
 
-        if (OperatingSystem.IsLinux())
-        {
-            if (Directory.Exists("/dev"))
-            {
-                var linuxPorts = Directory.GetFiles("/dev", "ttyACM*")
-                    .Concat(Directory.GetFiles("/dev", "ttyUSB*"))
-                    .OrderBy(p => p)
-                    .ToArray();
+        if (!OperatingSystem.IsLinux() || !Directory.Exists("/dev"))
+            return null;
 
-                if (linuxPorts.Length > 0)
-                    return linuxPorts[0];
-            }
+        var linuxPorts = Directory.GetFiles("/dev", "ttyACM*")
+            .Concat(Directory.GetFiles("/dev", "ttyUSB*"))
+            .OrderBy(p => p)
+            .ToArray();
 
-            const string byId = "/dev/serial/by-id";
-            if (Directory.Exists(byId))
-            {
-                var linkedPorts = Directory.GetFiles(byId).OrderBy(p => p).ToArray();
-                if (linkedPorts.Length > 0)
-                    return linkedPorts[0];
-            }
-        }
+        if (linuxPorts.Length > 0)
+            return linuxPorts[0];
 
-        if (OperatingSystem.IsWindows())
-        {
-#if WINDOWS
-            try
-            {
-                var searcher = new System.Management.ManagementObjectSearcher(
-                    "SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'");
-
-                foreach (System.Management.ManagementObject queryObj in searcher.Get())
-                {
-                    string nom = queryObj["Name"]?.ToString() ?? string.Empty;
-
-                    int debut = nom.LastIndexOf("COM", StringComparison.OrdinalIgnoreCase);
-                    int fin = nom.LastIndexOf(")", StringComparison.OrdinalIgnoreCase);
-
-                    if (debut != -1 && fin != -1)
-                        return nom.Substring(debut, fin - debut);
-                }
-            }
-            catch
-            {
-            }
-#endif
-        }
-
-        return null;
+        const string byId = "/dev/serial/by-id";
+        return Directory.Exists(byId)
+            ? Directory.GetFiles(byId).OrderBy(p => p).FirstOrDefault()
+            : null;
     }
 
-    private void DataHandler(object? sender, EventArgs e)
+    private void DataHandler(object? sender, SerialDataReceivedEventArgs e)
     {
-        if (sender is not SerialPort sp)
+        if (sender is not SerialPort serialPort)
             return;
 
-        _buffer += sp.ReadExisting();
-
-        int start = _buffer.IndexOf('{');
-        int end = _buffer.LastIndexOf('}');
-
-        if (start != -1 && end != -1 && end > start)
+        try
         {
-            string jsonComplet = _buffer.Substring(start, end - start + 1);
-            _buffer = string.Empty;
-            SerialBuffer.Enqueue(jsonComplet);
-            return;
+            _buffer += serialPort.ReadExisting();
+            foreach (var code in ExtractCodes())
+                CodeReceived?.Invoke(this, code);
         }
-
-        if (!_buffer.Contains('{') &&
-            (_buffer.EndsWith("\n") || _buffer.EndsWith("\r") || _buffer.Length > 30))
+        catch (IOException ex)
         {
-            var toSend = _buffer.Trim();
-            _buffer = string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(toSend))
-            {
-                SerialBuffer.Enqueue(toSend);
-            }
+            _logger.Error(ex, "Scanner disconnected while reading.");
+            ClosePort();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.Error(ex, "Scanner port closed while reading.");
+            ClosePort();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Scanner read error.");
         }
     }
 
-    public sealed class QueueBuffer : Queue
+    private void ErrorHandler(object sender, SerialErrorReceivedEventArgs e)
     {
-        public event EventHandler? Changed;
+        _logger.Info($"Serial port error received: {e.EventType}");
+    }
 
-        public override void Enqueue(object? obj)
+    private IEnumerable<string> ExtractCodes()
+    {
+        while (true)
         {
-            base.Enqueue(obj);
-            Changed?.Invoke(this, EventArgs.Empty);
+            var start = _buffer.IndexOf('{', StringComparison.Ordinal);
+            var end = _buffer.IndexOf('}', Math.Max(start, 0));
+
+            if (start >= 0 && end > start)
+            {
+                var json = _buffer.Substring(start, end - start + 1).Trim();
+                _buffer = _buffer[(end + 1)..];
+                yield return json;
+                continue;
+            }
+
+            if (!_buffer.Contains('{', StringComparison.Ordinal) &&
+                (_buffer.Contains('\n', StringComparison.Ordinal) ||
+                 _buffer.Contains('\r', StringComparison.Ordinal) ||
+                 _buffer.Length > 64))
+            {
+                var text = _buffer.Trim();
+                _buffer = string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(text))
+                    yield return text;
+            }
+
+            yield break;
         }
+    }
+
+    private void DisposePort()
+    {
+        if (_serialPort == null)
+            return;
+
+        _serialPort.DataReceived -= DataHandler;
+        _serialPort.ErrorReceived -= ErrorHandler;
+
+        if (_serialPort.IsOpen)
+            _serialPort.Close();
+
+        _serialPort.Dispose();
+        _serialPort = null;
     }
 }

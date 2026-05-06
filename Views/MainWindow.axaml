@@ -5,113 +5,101 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         d:DesignWidth="1400"
-        d:DesignHeight="800"
+        d:DesignHeight="860"
         x:Class="MyProjectBase.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        x:Name="Main"
         Icon="/Assets/avalonia-logo.ico"
-        Title="MyProjectBase"
-        Background="Black">
+        Title="Sneaker Collection"
+        MinWidth="980"
+        MinHeight="680">
 
-    <Window.DataContext>
-        <vm:MainWindowViewModel/>
-    </Window.DataContext>
-
-    <Grid RowDefinitions="Auto,*">
-        <Border Grid.Row="0"
-                Background="#1E1E1E"
-                BorderBrush="#D2B48C"
-                BorderThickness="2"
-                CornerRadius="3"
-                Padding="14"
-                Margin="10,10,10,0">
-
-            <Grid RowDefinitions="Auto,Auto"
-                  ColumnDefinitions="*,Auto"
-                  RowSpacing="12"
-                  ColumnSpacing="20">
-
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           Grid.ColumnSpan="2"
-                           Text="Sneaker Collection | Interface version 1.0 | Akim Belkouaci / Mohamed Atouli"
-                           Foreground="SkyBlue"
-                           FontSize="24"
-                           FontWeight="Bold"
-                           HorizontalAlignment="Center"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"/>
-
-                <StackPanel Grid.Row="1"
-                            Grid.Column="0"
-                            Orientation="Horizontal"
-                            Spacing="12"
-                            HorizontalAlignment="Left">
-                    <Button Background="SkyBlue"
-                            Foreground="Black"
-                            Command="{Binding ConnectScannerCommand}">
-                        Connect scanner
-                    </Button>
-
-                    <Button Background="#D2B48C"
-                            Foreground="Black"
-                            Command="{Binding DisconnectScannerCommand}">
-                        Disconnect scanner
-                    </Button>
+    <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="14">
+        <Border Grid.Row="0" Classes="panel">
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="14" ColumnSpacing="18">
+                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                    <TextBlock Text="Sneaker Collection | Interface version 1.0 | Akim Belkouaci / Mohamed Atouli"
+                               Classes="title"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="Avalonia • .NET 10 • JSON • CSV • Scanner • Comptes"
+                               Classes="muted"
+                               TextWrapping="Wrap" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1"
+                <StackPanel Grid.Row="0"
                             Grid.Column="1"
-                            HorizontalAlignment="Right"
-                            Spacing="4"
-                            MaxWidth="420">
-                    <TextBlock Text="{Binding IsScannerConnected, StringFormat=Scanner connected: {0}}"
-                               Foreground="White"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Right"
-                               TextWrapping="Wrap"/>
-
-                    <TextBlock Text="{Binding QrCode, StringFormat=Last scan: {0}}"
-                               Foreground="White"
-                               HorizontalAlignment="Right"
-                               TextWrapping="Wrap"
-                               TextAlignment="Right"/>
-
-                    <TextBlock Text="{Binding ErrorMessage}"
-                               Foreground="SkyBlue"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Right"
-                               TextWrapping="Wrap"
-                               TextAlignment="Right"/>
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            HorizontalAlignment="Right">
+                    <Button Content="Connect scanner"
+                            Classes="primary"
+                            Command="{Binding ConnectScannerCommand}" />
+                    <Button Content="Disconnect"
+                            Command="{Binding DisconnectScannerCommand}" />
                 </StackPanel>
+
+                <Grid Grid.Row="1"
+                      Grid.Column="0"
+                      Grid.ColumnSpan="2"
+                      ColumnDefinitions="*,Auto"
+                      ColumnSpacing="18">
+                    <StackPanel Grid.Column="0" Spacing="6">
+                        <TextBlock Text="{Binding StatusMessage}" Classes="status" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding QrCode, StringFormat=Last scan: {0}}"
+                                   Classes="muted"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Spacing="6" MinWidth="280">
+                        <TextBlock Text="{Binding IsScannerConnected, StringFormat=Scanner connected: {0}}"
+                                   HorizontalAlignment="Right"
+                                   FontWeight="SemiBold" />
+                        <ProgressBar IsIndeterminate="True"
+                                     IsVisible="{Binding IsBusy}"
+                                     Height="4" />
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" ColumnDefinitions="180,*" Margin="10">
-            <Border Grid.Column="0"
-                    Background="#1E1E1E"
-                    BorderBrush="#D2B48C"
-                    BorderThickness="2"
-                    CornerRadius="3"
-                    Padding="10"
-                    Margin="0,10,10,10">
-                <StackPanel HorizontalAlignment="Center">
-                    <Button Background="SkyBlue"
-                            Foreground="Black"
-                            Command="{Binding BackToMainCommand}"
-                            HorizontalAlignment="Center">
-                        Main
-                    </Button>
-                </StackPanel>
+        <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="14">
+            <Border Grid.Column="0" Classes="panel">
+                <ScrollViewer>
+                    <StackPanel Spacing="18">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="User session" FontWeight="Bold" />
+                            <TextBlock Text="{Binding CurrentUser.DisplayName, StringFormat=Logged in: {0}}"
+                                       IsVisible="{Binding IsAuthenticated}"
+                                       Classes="status" />
+                            <Button Content="Logout"
+                                    IsVisible="{Binding IsAuthenticated}"
+                                    Command="{Binding LogoutCommand}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" IsVisible="{Binding !IsAuthenticated}">
+                            <TextBlock Text="Login" FontWeight="Bold" />
+                            <TextBox Watermark="Email" Text="{Binding LoginEmail, Mode=TwoWay}" />
+                            <TextBox Watermark="Password" PasswordChar="*" Text="{Binding LoginPassword, Mode=TwoWay}" />
+                            <Button Content="Login" Classes="primary" Command="{Binding LoginCommand}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8" IsVisible="{Binding !IsAuthenticated}">
+                            <TextBlock Text="Create account" FontWeight="Bold" />
+                            <TextBox Watermark="Name" Text="{Binding RegisterDisplayName, Mode=TwoWay}" />
+                            <TextBox Watermark="Email" Text="{Binding RegisterEmail, Mode=TwoWay}" />
+                            <TextBox Watermark="Password" PasswordChar="*" Text="{Binding RegisterPassword, Mode=TwoWay}" />
+                            <Button Content="Create account" Command="{Binding RegisterCommand}" />
+                        </StackPanel>
+
+                        <Border Height="1" Background="#D2B48C" />
+
+                        <StackPanel Spacing="8">
+                            <Button Content="Collection" Classes="primary" Command="{Binding BackToMainCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
-            <Border Grid.Column="1"
-                    Background="#1E1E1E"
-                    BorderBrush="#D2B48C"
-                    BorderThickness="2"
-                    CornerRadius="3"
-                    Padding="10"
-                    Margin="0,10,0,10">
+            <Border Grid.Column="1" Classes="panel" Padding="0">
                 <TransitioningContentControl Content="{Binding CurrentPage}" />
             </Border>
         </Grid>

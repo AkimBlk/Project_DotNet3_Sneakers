@@ -1,275 +1,290 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MongoDB.Bson;
 using MyProjectBase.Helpers;
 using MyProjectBase.Models;
-
-using System.Threading.Tasks;
+using MyProjectBase.Repositories;
 using MyProjectBase.Services;
-
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Controls;
-
-using MyProjectBase.Views;
+using MyProjectBase.Utilities;
 
 namespace MyProjectBase.ViewModels;
 
 public partial class CollectionViewModel : ViewModelBase
 {
-    private readonly JSONServices _jsonServices;
+    private readonly IShoeRepository _shoeRepository;
+    private readonly IJsonShoeService _jsonShoeService;
+    private readonly ICsvService _csvService;
+    private readonly IDialogService _dialogService;
+    private readonly IAppLogger _logger;
 
-    public IRelayCommand<string> FromParentCommand { get; set; }
-    public ObservableCollection<Shoe> MyObservableShoes { get; }
+    public IRelayCommand<string> FromParentCommand { get; }
+    public ObservableCollection<Shoe> MyObservableShoes => _shoeRepository.Shoes;
 
-    [ObservableProperty]
-    private Shoe? _selectedShoe;
+    [ObservableProperty] private Shoe? _selectedShoe;
+    [ObservableProperty] private bool _isAddPanelVisible;
+    [ObservableProperty] private string _newBrand = string.Empty;
+    [ObservableProperty] private string _newModel = string.Empty;
+    [ObservableProperty] private string _newImagePath = string.Empty;
+    [ObservableProperty] private bool _isEditPanelVisible;
+    [ObservableProperty] private string _editBrand = string.Empty;
+    [ObservableProperty] private string _editModel = string.Empty;
+    [ObservableProperty] private string _editImagePath = string.Empty;
+    [ObservableProperty] private string _message = "Load remote JSON or import a CSV file.";
+    [ObservableProperty] private bool _isBusy;
 
-    //add
-    [ObservableProperty]
-    private bool _isAddPanelVisible;
-    [ObservableProperty]
-    private string _newBrand = string.Empty;
-    [ObservableProperty]
-    private string _newModel = string.Empty;
-    [ObservableProperty]
-    private string _newImagePath = string.Empty;
-    
-    //edit
-    [ObservableProperty] 
-    private bool _isEditPanelVisible;
-    [ObservableProperty]
-    private string _editBrand = string.Empty;
-    [ObservableProperty]
-    private string _editModel = string.Empty;
-    [ObservableProperty]
-    private string _editImagePath = string.Empty;
-    
-    [ObservableProperty]
-    private string _message = string.Empty;
-
-    public ObservableCollection<string> AvailableImages { get; } = new()
-    {
+    public ObservableCollection<string> AvailableImages { get; } =
+    [
         "avares://MyProjectBase/Assets/nike_air1.png",
         "avares://MyProjectBase/Assets/nike_p6000.png",
-        
         "avares://MyProjectBase/Assets/adidas_superstar.png",
-        
         "avares://MyProjectBase/Assets/NB_PP.png",
         "avares://MyProjectBase/Assets/NB_1906.png",
-        
-        "avares://MyProjectBase/Assets/asics.png",
-    };
+        "avares://MyProjectBase/Assets/asics.png"
+    ];
 
-    public CollectionViewModel(IRelayCommand<string> fromParentCommand)
+    public CollectionViewModel()
+        : this(
+            new RelayCommand<string>(_ => { }),
+            new ShoeRepository(),
+            new JsonShoeService(new AppLogger()),
+            new CsvService(new AppLogger()),
+            new DialogService(),
+            new AppLogger())
     {
-        _jsonServices = new JSONServices();
-        FromParentCommand = fromParentCommand;
-        MyObservableShoes = [];
     }
 
-    
-    
+    public CollectionViewModel(
+        IRelayCommand<string> fromParentCommand,
+        IShoeRepository shoeRepository,
+        IJsonShoeService jsonShoeService,
+        ICsvService csvService,
+        IDialogService dialogService,
+        IAppLogger logger)
+    {
+        FromParentCommand = fromParentCommand;
+        _shoeRepository = shoeRepository;
+        _jsonShoeService = jsonShoeService;
+        _csvService = csvService;
+        _dialogService = dialogService;
+        _logger = logger;
+    }
+
     [RelayCommand]
     private async Task LoadJsonAsync()
     {
-        var shoes = await _jsonServices.GetShoesAsync();
+        IsBusy = true;
+        Message = "Loading JSON...";
 
-        MyGlobals.MyShoes.Clear();
-        MyObservableShoes.Clear();
-        Message = string.Empty;
-
-        foreach (var shoe in shoes)
+        try
         {
-            if (!string.IsNullOrWhiteSpace(shoe.ImagePath))
+            var result = await _jsonShoeService.GetShoesAsync(CancellationToken);
+            if (!result.Success || result.Value == null)
             {
-                try
-                {
-                    shoe.Picture = ImageHelper.LoadFromResource(new Uri(shoe.ImagePath));
-                }
-                catch (Exception)
-                {
-                }
+                Message = result.Message;
+                return;
             }
-            MyGlobals.MyShoes.Add(shoe);
-            MyObservableShoes.Add(shoe);
+
+            foreach (var shoe in result.Value)
+                shoe.Picture = ImageHelper.LoadShoePicture(shoe);
+
+            _shoeRepository.ReplaceAll(result.Value);
+            SelectedShoe = null;
+            Message = result.Message;
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
-    
-    
     [RelayCommand]
     private void AddShoe()
     {
         IsEditPanelVisible = false;
         IsAddPanelVisible = true;
+        Message = "Creating a sneaker.";
     }
 
     [RelayCommand]
     private async Task ConfirmAddAsync()
     {
-        
-        if (string.IsNullOrWhiteSpace(NewBrand) || string.IsNullOrWhiteSpace(NewModel) || string.IsNullOrWhiteSpace(NewImagePath))
-        {
-            Message = "| Fill all fields !";
-            return;
-        }
-        
-        bool isConfirmed = await ConfirmWindow.ShowAsync("Sure add this sneaker ?");
-        if (!isConfirmed) {return;}
-        
         var newShoe = new Shoe
         {
-            Id = Guid.NewGuid().ToString(),//fera auto l'id
-            Brand = NewBrand,
-            Model = NewModel,
-            ImagePath = NewImagePath
+            Id = Guid.NewGuid().ToString(),
+            Brand = NewBrand.Trim(),
+            Model = NewModel.Trim(),
+            ImagePath = NewImagePath.Trim()
         };
 
-        MyGlobals.MyShoes.Add(newShoe);
+        var errors = ShoeValidator.Validate(newShoe);
+        if (errors.Count > 0)
+        {
+            Message = string.Join(" ", errors);
+            return;
+        }
 
-        await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
+        var isConfirmed = await _dialogService.ConfirmAsync("Add this sneaker?");
+        if (!isConfirmed)
+        {
+            Message = "Add canceled.";
+            return;
+        }
+
+        newShoe.Picture = ImageHelper.LoadShoePicture(newShoe);
+        _shoeRepository.Add(newShoe);
+
+        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+        if (!result.Success)
+        {
+            Message = result.Message;
+            return;
+        }
 
         NewBrand = string.Empty;
         NewModel = string.Empty;
         NewImagePath = string.Empty;
         IsAddPanelVisible = false;
-        
-        Message = "| Add success, reload JSON !";
+        Message = "Sneaker added.";
     }
-    
+
     [RelayCommand]
     private void CancelAdd()
     {
         IsAddPanelVisible = false;
+        Message = "Add canceled.";
     }
 
-    
-    
     [RelayCommand]
     private async Task ExportCsvAsync()
     {
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        IsBusy = true;
+        try
         {
-            var topLevel = TopLevel.GetTopLevel(desktop.MainWindow);
-            if (topLevel != null)
-            {
-                var csvService = new CsvServices(topLevel);
-                await csvService.SaveDataAsync(new List<Shoe>(MyGlobals.MyShoes));
-            }
+            var result = await _csvService.SaveDataAsync(_shoeRepository.Shoes, CancellationToken);
+            Message = result.Message;
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
-    
 
-    
     [RelayCommand]
     private async Task ImportCsvAsync()
     {
-        bool isConfirmed = await ConfirmWindow.ShowAsync("Sure import CSV ?");
-        if (!isConfirmed) return;
-    
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        var isConfirmed = await _dialogService.ConfirmAsync("Import this CSV and replace the current collection?");
+        if (!isConfirmed)
         {
-            var topLevel = TopLevel.GetTopLevel(desktop.MainWindow);
-            if (topLevel != null)
+            Message = "CSV import canceled.";
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var imported = await _csvService.LoadDataAsync(CancellationToken);
+            if (!imported.Success || imported.Value == null)
             {
-                var csvService = new CsvServices(topLevel);
-
-                var importedShoes = await csvService.LoadDataAsync();
-            
-                MyGlobals.MyShoes.Clear();
-                MyObservableShoes.Clear(); 
-                
-                foreach (var shoe in importedShoes)
-                {
-                    MyGlobals.MyShoes.Add(shoe);
-                    //MyObservableShoes.Add(shoe);
-                }
-
-                await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
-            
-                Message = "| Import CSV ok, reload JSON !";
+                Message = imported.Message;
+                return;
             }
+
+            _shoeRepository.ReplaceAll(imported.Value);
+
+            var saveResult = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+            Message = saveResult.Success ? imported.Message : saveResult.Message;
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
-    
-    
-    
+
     [RelayCommand]
     private void OpenEditPanel()
     {
         if (SelectedShoe == null)
         {
-            Message = "| Select a sneaker to edit";
+            Message = "Select a sneaker to edit.";
             return;
         }
 
         EditBrand = SelectedShoe.Brand;
         EditModel = SelectedShoe.Model;
         EditImagePath = SelectedShoe.ImagePath;
-        
+
         IsEditPanelVisible = true;
         IsAddPanelVisible = false;
+        Message = $"Modification de {SelectedShoe.Brand} {SelectedShoe.Model}.";
     }
 
     [RelayCommand]
     private void CancelEdit()
     {
         IsEditPanelVisible = false;
+        Message = "Edit canceled.";
     }
 
     [RelayCommand]
     private async Task ConfirmEditAsync()
     {
-        if (SelectedShoe == null){return;}
-        
-        bool isConfirmed = await ConfirmWindow.ShowAsync($"Sure edit : \"{SelectedShoe.Brand} : {SelectedShoe.Model}\" ?");
-        if (!isConfirmed){return;}
-        
-        var shoeToUpdate = MyGlobals.MyShoes.FirstOrDefault(s => s.Id == SelectedShoe.Id);
-        if (shoeToUpdate != null)
-        {
-            shoeToUpdate.Brand = EditBrand;
-            shoeToUpdate.Model = EditModel;
-            shoeToUpdate.ImagePath = EditImagePath;
-        }
-        
-        await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
+        if (SelectedShoe == null)
+            return;
 
+        var updated = new Shoe
+        {
+            Id = SelectedShoe.Id,
+            Brand = EditBrand.Trim(),
+            Model = EditModel.Trim(),
+            ImagePath = EditImagePath.Trim()
+        };
+
+        var errors = ShoeValidator.Validate(updated);
+        if (errors.Count > 0)
+        {
+            Message = string.Join(" ", errors);
+            return;
+        }
+
+        var isConfirmed = await _dialogService.ConfirmAsync($"Edit {SelectedShoe.Brand} {SelectedShoe.Model}?");
+        if (!isConfirmed)
+        {
+            Message = "Edit canceled.";
+            return;
+        }
+
+        SelectedShoe.Brand = updated.Brand;
+        SelectedShoe.Model = updated.Model;
+        SelectedShoe.ImagePath = updated.ImagePath;
+        SelectedShoe.Picture = ImageHelper.LoadShoePicture(SelectedShoe);
+
+        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
         IsEditPanelVisible = false;
-        Message = "| Edit success, reload JSON !";
+        Message = result.Success ? "Sneaker updated." : result.Message;
     }
-    
-    
-    
+
     [RelayCommand]
     private async Task DeleteSelectedShoeAsync()
     {
-        if (SelectedShoe != null)
+        if (SelectedShoe == null)
         {
-            bool isConfirmed = await ConfirmWindow.ShowAsync("Sure delete this sneaker ?");
-            if (!isConfirmed)
-            {
-                SelectedShoe = null;
-                return;
-            }
-            
-            string deletedInfo = $"{SelectedShoe.Brand} {SelectedShoe.Model}";
-            
-            var shoeToRemove = MyGlobals.MyShoes.FirstOrDefault(shoe => shoe.Id == SelectedShoe.Id);
-            MyGlobals.MyShoes.Remove(shoeToRemove);
-            
-            await _jsonServices.SetShoesAsync(new List<Shoe>(MyGlobals.MyShoes));
-            SelectedShoe = null;
-            
-            Message = $"| Deleted : {deletedInfo}, reload JSON !";
-        } else {
-            Message = "| Select a sneaker to delete";
+            Message = "Select a sneaker to delete.";
             return;
         }
+
+        var deletedInfo = $"{SelectedShoe.Brand} {SelectedShoe.Model}";
+        var isConfirmed = await _dialogService.ConfirmAsync($"Delete {deletedInfo}?");
+        if (!isConfirmed)
+        {
+            Message = "Delete canceled.";
+            return;
+        }
+
+        _shoeRepository.Remove(SelectedShoe.Id);
+        SelectedShoe = null;
+
+        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+        Message = result.Success ? $"Deleted: {deletedInfo}." : result.Message;
     }
+
 }

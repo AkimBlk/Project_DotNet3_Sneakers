@@ -3,31 +3,39 @@
              xmlns:vm="using:MyProjectBase.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d"
+             d:DesignWidth="900"
+             d:DesignHeight="620"
              x:Class="MyProjectBase.Views.CollectionDetailsView"
-             x:DataType="vm:CollectionDetailsViewModel"> 
-    
+             x:DataType="vm:CollectionDetailsViewModel">
+
     <Design.DataContext>
-        <vm:CollectionDetailsViewModel/>
+        <vm:CollectionDetailsViewModel />
     </Design.DataContext>
-    
-    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-        <Border Background="Black" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="10" Padding="20" Margin="20">
-            <StackPanel Orientation="Horizontal" Spacing="20">
-                <Image Height="550" Width="750" Stretch="Uniform"  Source="{Binding MyShoe.Picture}" />
-                <Border Width="2" Background="#D2B48C" CornerRadius="1" />
-                <StackPanel Orientation="Vertical" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="25">
-                    <TextBlock Text="Sneaker Details" Foreground="SkyBlue" FontSize="28" FontWeight="Bold"  />
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Brand" Foreground="Gray" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding MyShoe.Brand}" Foreground="White" FontSize="24" FontWeight="Bold"/>
-                    </StackPanel>
-                    <StackPanel Spacing="5">
-                        <TextBlock Text="Model" Foreground="Gray" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding MyShoe.Model}" Foreground="White" FontSize="24" FontWeight="Bold"/>
-                    </StackPanel>
-                </StackPanel>
-            </StackPanel>
+
+    <Grid Margin="24" ColumnDefinitions="*,320" ColumnSpacing="24">
+        <Border Grid.Column="0" Classes="panel">
+            <Image Source="{Binding MyShoe.Picture}"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch"
+                   MinHeight="360" />
         </Border>
+
+        <StackPanel Grid.Column="1" Spacing="18" VerticalAlignment="Center">
+            <TextBlock Text="Sneaker details" Classes="title" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="Brand" Classes="muted" />
+                <TextBlock Text="{Binding MyShoe.Brand}" FontSize="28" FontWeight="Bold" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="Model" Classes="muted" />
+                <TextBlock Text="{Binding MyShoe.Model}" FontSize="22" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="Identifier" Classes="muted" />
+                <TextBlock Text="{Binding MyShoe.Id}" TextWrapping="Wrap" />
+            </StackPanel>
         </StackPanel>
+    </Grid>
 </UserControl>

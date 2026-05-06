@@ -1,69 +1,157 @@
-﻿using System.Collections.Generic;
-using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading.Tasks;
 using MyProjectBase.Models;
+using MyProjectBase.Utilities;
 
-namespace MyProjectBase.Services
+namespace MyProjectBase.Services;
+
+public interface IJsonShoeService
 {
-    public class JSONServices
+    Task<ServiceResult<List<Shoe>>> GetShoesAsync(CancellationToken cancellationToken = default);
+    Task<ServiceResult> SetShoesAsync(IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default);
+}
+
+public sealed class JsonShoeService : IJsonShoeService
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        });
-        
-        private const string BaseUrl = "http://185.157.245.38:8080/json";
-        //private const string BaseUrl = "http://localhost:5226/json";//POUR TEST MOI
-        
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
 
-        internal async Task<List<Shoe>> GetShoesAsync()
-        {
-            const string url = $"{BaseUrl}?FileName=MyShoess.json";
-            //const string url = $"{BaseUrl}?fileName=MyShoess.json";//POUR TEST MOI
+    private readonly HttpClient _httpClient;
+    private readonly IAppLogger _logger;
+    private readonly string _baseUrl;
 
-            using var response = await _httpClient.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return new List<Shoe>();
-            
-            var jsonString = await response.Content.ReadAsStringAsync();
-            
-            //verifie si json vide 
-            if (string.IsNullOrWhiteSpace(jsonString)) 
-            {
-                return new List<Shoe>();
-            }
-            
-            await using var contentStream = await response.Content.ReadAsStreamAsync();
-            return await JsonSerializer.DeserializeAsync<List<Shoe>>(contentStream) ?? new List<Shoe>();
+    public JsonShoeService(IAppLogger logger)
+    {
+        _logger = logger;
+        _baseUrl = "http://185.157.245.38:8080/json";
+        _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(8)
+        };
+    }
+
+    public async Task<ServiceResult<List<Shoe>>> GetShoesAsync(CancellationToken cancellationToken = default)
+    {
+        const string fileName = "MyShoess.json";
+        var url = $"{_baseUrl}?FileName={Uri.EscapeDataString(fileName)}";
+
+        try
+        {
+            using var response = await SendWithRetryAsync(
+                () => _httpClient.GetAsync(url, cancellationToken),
+                cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            return ServiceResult<List<Shoe>>.Fail($"Remote JSON unavailable ({(int)response.StatusCode}).");
+
+            await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var shoes = await JsonSerializer.DeserializeAsync<List<Shoe>>(contentStream, JsonOptions, cancellationToken) ?? [];
+            var validShoes = shoes.Where(shoe => ShoeValidator.Validate(shoe).Count == 0).ToList();
+
+            foreach (var shoe in validShoes.Where(shoe => string.IsNullOrWhiteSpace(shoe.Id)))
+                shoe.Id = Guid.NewGuid().ToString();
+
+            return ServiceResult<List<Shoe>>.Ok(validShoes, $"{validShoes.Count} sneakers loaded.");
         }
-
-        internal async Task SetShoesAsync(List<Shoe> shoes)
+        catch (JsonException ex)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            
-            var url = BaseUrl;
+            _logger.Error(ex, "Invalid remote JSON.");
+            return ServiceResult<List<Shoe>>.Fail("Remote JSON is invalid.");
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.Error(ex, "Unsupported JSON format.");
+            return ServiceResult<List<Shoe>>.Fail($"Unsupported JSON format: {ex.Message}");
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.Error(ex, "Remote JSON timeout.");
+            return ServiceResult<List<Shoe>>.Fail("Network timeout while loading JSON.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "Remote JSON network error.");
+            return ServiceResult<List<Shoe>>.Fail("No network connection or JSON server unavailable.");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Unexpected remote JSON error.");
+            return ServiceResult<List<Shoe>>.Fail($"JSON loading error: {ex.Message}");
+        }
+    }
 
-            using var memoryStream = new MemoryStream();
-            await JsonSerializer.SerializeAsync(memoryStream, shoes, options);
+    public async Task<ServiceResult> SetShoesAsync(IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var validShoes = shoes.Where(shoe => ShoeValidator.Validate(shoe).Count == 0).ToList();
+
+            await using var memoryStream = new MemoryStream();
+            await JsonSerializer.SerializeAsync(memoryStream, validShoes, JsonOptions, cancellationToken);
             memoryStream.Position = 0;
 
-            var fileContent = new StreamContent(memoryStream)
+            using var fileContent = new StreamContent(memoryStream)
             {
                 Headers = { ContentType = new MediaTypeHeaderValue("application/json") }
             };
 
-            var content = new MultipartFormDataContent
+            using var content = new MultipartFormDataContent
             {
                 { fileContent, "file", "MyShoess.json" }
             };
 
-            using var response = await _httpClient.PostAsync(url, content);
-            if (!response.IsSuccessStatusCode)
+            using var response = await SendWithRetryAsync(
+                () => _httpClient.PostAsync(_baseUrl, content, cancellationToken),
+                cancellationToken);
+
+            return response.IsSuccessStatusCode
+                ? ServiceResult.Ok("Remote JSON updated.")
+                : ServiceResult.Fail($"JSON save refused ({(int)response.StatusCode}).");
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.Error(ex, "JSON save timeout.");
+            return ServiceResult.Fail("Network timeout while saving JSON.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "JSON save network error.");
+            return ServiceResult.Fail("Save failed: JSON server unavailable.");
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.Error(ex, "Unsupported JSON format while saving.");
+            return ServiceResult.Fail($"JSON save failed: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Unexpected JSON save error.");
+            return ServiceResult.Fail($"JSON save error: {ex.Message}");
+        }
+    }
+
+    private static async Task<HttpResponseMessage> SendWithRetryAsync(
+        Func<Task<HttpResponseMessage>> operation,
+        CancellationToken cancellationToken)
+    {
+        const int attempts = 3;
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
             {
-                
+                return await operation();
+            }
+            catch when (attempt < attempts && !cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(300 * attempt), cancellationToken);
             }
         }
+
+        return await operation();
     }
 }

@@ -1,93 +1,155 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:MyProjectBase.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="MyProjectBase.Views.CollectionView"
-        x:DataType="vm:CollectionViewModel"
-        x:Name="Collection">
-    
-    <Design.DataContext>
-        <vm:CollectionViewModel/>
-    </Design.DataContext>
-    
-    <DockPanel Margin="20">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
-            <Button Content="Load JSON" Command="{Binding LoadJsonCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Add Shoe" Command="{Binding AddShoeCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Edit Shoe" Command="{Binding OpenEditPanelCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Delete Shoe" Command="{Binding DeleteSelectedShoeCommand}" Background="SkyBlue" Foreground="Black" />
-            
-            <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" Background="SkyBlue" Foreground="Black" />
-            
-            <TextBlock Text="{Binding Message}" Foreground="SkyBlue" FontWeight="Bold" VerticalAlignment="Center" Margin="15,0,0,0" />
-            
-        </StackPanel>
-        
-        <!--pannel du form add-->
-        <StackPanel DockPanel.Dock="Right" Width="250" Margin="15,0,0,0" Spacing="10" IsVisible="{Binding IsAddPanelVisible}">
-            <TextBlock Text="Add a shoe" Foreground="White" FontWeight="Bold" />
-            <TextBlock Text="Brand" Foreground="White" />
-            <TextBox Text="{Binding NewBrand, Mode=TwoWay}" />
-            <TextBlock Text="Model" Foreground="White" />
-            <TextBox Text="{Binding NewModel, Mode=TwoWay}" />
-            <TextBlock Text="Image" Foreground="White" />
-            <ComboBox ItemsSource="{Binding AvailableImages}" SelectedItem="{Binding NewImagePath, Mode=TwoWay}" />
-            <Button Content="Save" Command="{Binding ConfirmAddCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Cancel" Command="{Binding CancelAddCommand}" Background="SkyBlue" Foreground="Black" />
-        </StackPanel>
-        
-        <!--pannel du form edit-->
-        <StackPanel DockPanel.Dock="Right" Width="250" Margin="15,0,0,0" Spacing="10" IsVisible="{Binding IsEditPanelVisible}">
-            <TextBlock Text="Edit shoe" Foreground="White" FontWeight="Bold" />
-            <TextBlock Text="Brand" Foreground="White" />
-            <TextBox Text="{Binding EditBrand, Mode=TwoWay}" />
-            <TextBlock Text="Model" Foreground="White" />
-            <TextBox Text="{Binding EditModel, Mode=TwoWay}" />
-            <TextBlock Text="Image" Foreground="White" />
-            <ComboBox ItemsSource="{Binding AvailableImages}" SelectedItem="{Binding EditImagePath, Mode=TwoWay}" />
-            <Button Content="Save" Command="{Binding ConfirmEditCommand}" Background="SkyBlue" Foreground="Black" />
-            <Button Content="Cancel" Command="{Binding CancelEditCommand}" Background="SkyBlue" Foreground="Black" />
-        </StackPanel>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyProjectBase.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="1000"
+             d:DesignHeight="620"
+             x:Class="MyProjectBase.Views.CollectionView"
+             x:DataType="vm:CollectionViewModel"
+             x:Name="Collection">
 
-        <Border Background="Black" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3">
-            <ScrollViewer>
-                <ListBox x:Name="Shoes" 
-                         ItemsSource="{Binding MyObservableShoes}" 
+    <Design.DataContext>
+        <vm:CollectionViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,Auto" RowSpacing="12" ColumnSpacing="12" Margin="16">
+        <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="Collection" Classes="title" />
+                    <TextBlock Text="{Binding Message}" Classes="status" TextWrapping="Wrap" />
+                </StackPanel>
+                <ProgressBar Grid.Column="1"
+                             Width="160"
+                             Height="4"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsBusy}"
+                             VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="0" Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+                <WrapPanel Grid.Row="0" Margin="12" ItemSpacing="8" LineSpacing="8">
+                    <Button Content="Load JSON" Classes="primary" Command="{Binding LoadJsonCommand}" />
+                    <Button Content="Add" Command="{Binding AddShoeCommand}" />
+                    <Button Content="Edit" Command="{Binding OpenEditPanelCommand}" />
+                    <Button Content="Delete" Classes="danger" Command="{Binding DeleteSelectedShoeCommand}" />
+                    <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+                    <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" />
+                </WrapPanel>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding MyObservableShoes}"
                          SelectedItem="{Binding SelectedShoe}"
+                         Background="Transparent"
+                         BorderThickness="0"
                          ScrollViewer.VerticalScrollBarVisibility="Visible"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         Background="Transparent">
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="#1E1E1E" BorderBrush="#D2B48C" BorderThickness="2" CornerRadius="3" Padding="10" Margin="10">
-                                <Grid ColumnDefinitions="*,*,*">
-                                    
-                                    <Panel>
-                                        <Image Margin="20" Height="250" Width="400" 
-                                               Stretch="UniformToFill"
-                                               Source="{Binding Picture}" />
-                                    </Panel>
-                                    
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <!--<TextBlock Text="{Binding Id, StringFormat=I : {0}}" Foreground="White"/>-->
-                                        <TextBlock Text="{Binding Brand, StringFormat=Brand : {0}}" Foreground="White"/>
-                                        <TextBlock Text="{Binding Model, StringFormat=Model : {0}}" Foreground="White"/>
+                            <Border Background="Black"
+                                    BorderBrush="#D2B48C"
+                                    BorderThickness="2"
+                                    CornerRadius="3"
+                                    Padding="18"
+                                    Margin="12,8"
+                                    HorizontalAlignment="Stretch">
+                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,180" RowSpacing="16" ColumnSpacing="18">
+                                    <Border Grid.Row="0"
+                                            Grid.Column="0"
+                                            Grid.ColumnSpan="2"
+                                            Background="Black"
+                                            MinHeight="280"
+                                            MaxHeight="320">
+                                        <Image Width="520"
+                                           Height="300"
+                                           Stretch="Uniform"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Source="{Binding Picture}" />
+                                    </Border>
+
+                                    <StackPanel Grid.Row="1"
+                                                Grid.Column="0"
+                                                VerticalAlignment="Center"
+                                                Spacing="10"
+                                                MinWidth="320">
+                                        <TextBlock Text="{Binding Brand}"
+                                                   FontSize="28"
+                                                   FontWeight="Bold"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Model}"
+                                                   Classes="muted"
+                                                   FontSize="20"
+                                                   TextWrapping="Wrap"
+                                                   MaxLines="2" />
+                                        <TextBlock Text="{Binding Id, StringFormat=ID : {0}}"
+                                                   Classes="muted"
+                                                   FontSize="13"
+                                                   MaxLines="1"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            Content="Action"
+
+                                    <Button Grid.Row="1"
+                                            Grid.Column="1"
+                                            Content="Details"
+                                            Classes="primary"
                                             Command="{Binding DataContext.FromParentCommand, ElementName=Collection}"
                                             CommandParameter="{Binding Id}"
-                                            Background="SkyBlue" Foreground="Black" />
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Stretch"
+                                            MinWidth="140" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                
-            </ScrollViewer>
+            </Grid>
         </Border>
-    </DockPanel>
+
+        <Border Grid.Row="1"
+                Grid.Column="1"
+                Classes="panel"
+                Width="320"
+                IsVisible="{Binding IsAddPanelVisible}">
+            <StackPanel Spacing="10">
+                <TextBlock Text="Add a sneaker" FontWeight="Bold" FontSize="18" />
+                <TextBlock Text="Brand" Classes="muted" />
+                <TextBox Text="{Binding NewBrand, Mode=TwoWay}" Watermark="Nike" />
+                <TextBlock Text="Model" Classes="muted" />
+                <TextBox Text="{Binding NewModel, Mode=TwoWay}" Watermark="Air Max" />
+                <TextBlock Text="Image" Classes="muted" />
+                <ComboBox ItemsSource="{Binding AvailableImages}"
+                          SelectedItem="{Binding NewImagePath, Mode=TwoWay}"
+                          MaxDropDownHeight="220" />
+                <Button Content="Save" Classes="primary" Command="{Binding ConfirmAddCommand}" />
+                <Button Content="Cancel" Command="{Binding CancelAddCommand}" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                Grid.Column="1"
+                Classes="panel"
+                Width="320"
+                IsVisible="{Binding IsEditPanelVisible}">
+            <StackPanel Spacing="10">
+                <TextBlock Text="Edit sneaker" FontWeight="Bold" FontSize="18" />
+                <TextBlock Text="Brand" Classes="muted" />
+                <TextBox Text="{Binding EditBrand, Mode=TwoWay}" />
+                <TextBlock Text="Model" Classes="muted" />
+                <TextBox Text="{Binding EditModel, Mode=TwoWay}" />
+                <TextBlock Text="Image" Classes="muted" />
+                <ComboBox ItemsSource="{Binding AvailableImages}"
+                          SelectedItem="{Binding EditImagePath, Mode=TwoWay}"
+                          MaxDropDownHeight="220" />
+                <Button Content="Save" Classes="primary" Command="{Binding ConfirmEditCommand}" />
+                <Button Content="Cancel" Command="{Binding CancelEditCommand}" />
+            </StackPanel>
+        </Border>
+    </Grid>
 </UserControl>

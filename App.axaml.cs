@@ -1,15 +1,18 @@
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
-using MyProjectBase.ViewModels;
+using Avalonia.Threading;
+using MyProjectBase.Services;
 using MyProjectBase.Views;
 
 namespace MyProjectBase;
 
 public class App : Application
 {
+    private AppServices? _services;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -17,30 +20,51 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        _services = new AppServices();
+        RegisterGlobalErrorHandlers(_services.Logger);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
-            // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
+
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(),
+                DataContext = _services.CreateMainWindowViewModel()
             };
+
+            desktop.Exit += (_, _) => _services.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void DisableAvaloniaDataAnnotationValidation()
+    private static void RegisterGlobalErrorHandlers(IAppLogger logger)
     {
-        // Get an array of plugins to remove
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception exception)
+                logger.Error(exception, "Unhandled global exception.");
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            logger.Error(args.Exception, "Unobserved task exception.");
+            args.SetObserved();
+        };
+
+        Dispatcher.UIThread.UnhandledException += (_, args) =>
+        {
+            logger.Error(args.Exception, "Unhandled UI exception.");
+            args.Handled = true;
+        };
+    }
+
+    private static void DisableAvaloniaDataAnnotationValidation()
+    {
         var dataValidationPluginsToRemove =
             BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
 
-        // remove each entry found
         foreach (var plugin in dataValidationPluginsToRemove)
-        {
             BindingPlugins.DataValidators.Remove(plugin);
-        }
     }
 }
