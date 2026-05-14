@@ -17,7 +17,7 @@
         <Border Grid.Row="0" Classes="panel">
             <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="14" ColumnSpacing="18">
                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
-                    <TextBlock Text="Sneaker Collection | Interface version 1.0 | Akim Belkouaci / Mohamed Atouli"
+                    <TextBlock Text="Sneaker Collection | Interface version 2.0 | Akim Belkouaci / Mohamed Atouli"
                                Classes="title"
                                TextWrapping="Wrap" />
                     <TextBlock Text="Avalonia • .NET 10 • JSON • CSV • Scanner • Comptes"
@@ -73,6 +73,10 @@
                             <Button Content="Logout"
                                     IsVisible="{Binding IsAuthenticated}"
                                     Command="{Binding LogoutCommand}" />
+                            <Button Content="Administration"
+                                    Classes="primary"
+                                    IsVisible="{Binding IsAdmin}"
+                                    Command="{Binding GoToAdminCommand}" />
                         </StackPanel>
 
                         <StackPanel Spacing="8" IsVisible="{Binding !IsAuthenticated}">

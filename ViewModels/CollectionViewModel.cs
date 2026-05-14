@@ -16,6 +16,7 @@ public partial class CollectionViewModel : ViewModelBase
     private readonly ICsvService _csvService;
     private readonly IDialogService _dialogService;
     private readonly IAppLogger _logger;
+    private readonly Func<string> _collectionKeyProvider;
 
     public IRelayCommand<string> FromParentCommand { get; }
     public ObservableCollection<Shoe> MyObservableShoes => _shoeRepository.Shoes;
@@ -24,13 +25,26 @@ public partial class CollectionViewModel : ViewModelBase
     [ObservableProperty] private bool _isAddPanelVisible;
     [ObservableProperty] private string _newBrand = string.Empty;
     [ObservableProperty] private string _newModel = string.Empty;
+    [ObservableProperty] private string _newGroup = "Sneakers";
+    [ObservableProperty] private int _newStock;
+    [ObservableProperty] private decimal _newPrice;
     [ObservableProperty] private string _newImagePath = string.Empty;
     [ObservableProperty] private bool _isEditPanelVisible;
     [ObservableProperty] private string _editBrand = string.Empty;
     [ObservableProperty] private string _editModel = string.Empty;
+    [ObservableProperty] private string _editGroup = "Sneakers";
+    [ObservableProperty] private int _editStock;
+    [ObservableProperty] private decimal _editPrice;
     [ObservableProperty] private string _editImagePath = string.Empty;
     [ObservableProperty] private string _message = "Load remote JSON or import a CSV file.";
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _exportId = true;
+    [ObservableProperty] private bool _exportBrand = true;
+    [ObservableProperty] private bool _exportModel = true;
+    [ObservableProperty] private bool _exportGroup = true;
+    [ObservableProperty] private bool _exportStock = true;
+    [ObservableProperty] private bool _exportPrice = true;
+    [ObservableProperty] private bool _exportImagePath = true;
 
     public ObservableCollection<string> AvailableImages { get; } =
     [
@@ -49,7 +63,8 @@ public partial class CollectionViewModel : ViewModelBase
             new JsonShoeService(new AppLogger()),
             new CsvService(new AppLogger()),
             new DialogService(),
-            new AppLogger())
+            new AppLogger(),
+            () => "design")
     {
     }
 
@@ -59,7 +74,8 @@ public partial class CollectionViewModel : ViewModelBase
         IJsonShoeService jsonShoeService,
         ICsvService csvService,
         IDialogService dialogService,
-        IAppLogger logger)
+        IAppLogger logger,
+        Func<string> collectionKeyProvider)
     {
         FromParentCommand = fromParentCommand;
         _shoeRepository = shoeRepository;
@@ -67,6 +83,7 @@ public partial class CollectionViewModel : ViewModelBase
         _csvService = csvService;
         _dialogService = dialogService;
         _logger = logger;
+        _collectionKeyProvider = collectionKeyProvider;
     }
 
     [RelayCommand]
@@ -77,10 +94,39 @@ public partial class CollectionViewModel : ViewModelBase
 
         try
         {
-            var result = await _jsonShoeService.GetShoesAsync(CancellationToken);
+            var result = await _jsonShoeService.GetShoesAsync(_collectionKeyProvider(), CancellationToken);
             if (!result.Success || result.Value == null)
             {
-                Message = result.Message;
+                if (_shoeRepository.Shoes.Count == 0)
+                {
+                    var defaults = DefaultShoeCatalog.Create();
+                    foreach (var shoe in defaults)
+                        shoe.Picture = ImageHelper.LoadShoePicture(shoe);
+
+                    _shoeRepository.ReplaceAll(defaults);
+                    Message = $"Default collection loaded. {result.Message}";
+                }
+                else
+                {
+                    Message = result.Message;
+                }
+
+                return;
+            }
+
+            if (result.Value.Count == 0)
+            {
+                var defaults = DefaultShoeCatalog.Create();
+                foreach (var shoe in defaults)
+                    shoe.Picture = ImageHelper.LoadShoePicture(shoe);
+
+                _shoeRepository.ReplaceAll(defaults);
+                SelectedShoe = null;
+                var saveResult = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
+                Message = saveResult.Success
+                    ? "Remote collection was empty; default collection created."
+                    : saveResult.Message;
+
                 return;
             }
 
@@ -113,6 +159,9 @@ public partial class CollectionViewModel : ViewModelBase
             Id = Guid.NewGuid().ToString(),
             Brand = NewBrand.Trim(),
             Model = NewModel.Trim(),
+            Group = string.IsNullOrWhiteSpace(NewGroup) ? "Sneakers" : NewGroup.Trim(),
+            Stock = NewStock,
+            Price = NewPrice,
             ImagePath = NewImagePath.Trim()
         };
 
@@ -133,7 +182,7 @@ public partial class CollectionViewModel : ViewModelBase
         newShoe.Picture = ImageHelper.LoadShoePicture(newShoe);
         _shoeRepository.Add(newShoe);
 
-        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+        var result = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
         if (!result.Success)
         {
             Message = result.Message;
@@ -142,6 +191,9 @@ public partial class CollectionViewModel : ViewModelBase
 
         NewBrand = string.Empty;
         NewModel = string.Empty;
+        NewGroup = "Sneakers";
+        NewStock = 0;
+        NewPrice = 0;
         NewImagePath = string.Empty;
         IsAddPanelVisible = false;
         Message = "Sneaker added.";
@@ -160,7 +212,8 @@ public partial class CollectionViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            var result = await _csvService.SaveDataAsync(_shoeRepository.Shoes, CancellationToken);
+            var options = new CsvExportOptions(ExportId, ExportBrand, ExportModel, ExportGroup, ExportStock, ExportPrice, ExportImagePath);
+            var result = await _csvService.SaveDataAsync(_shoeRepository.Shoes, options, CancellationToken);
             Message = result.Message;
         }
         finally
@@ -172,7 +225,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task ImportCsvAsync()
     {
-        var isConfirmed = await _dialogService.ConfirmAsync("Import this CSV and replace the current collection?");
+        var isConfirmed = await _dialogService.ConfirmAsync("Import this CSV and add its sneakers to the current collection?");
         if (!isConfirmed)
         {
             Message = "CSV import canceled.";
@@ -189,10 +242,17 @@ public partial class CollectionViewModel : ViewModelBase
                 return;
             }
 
-            _shoeRepository.ReplaceAll(imported.Value);
+            var added = 0;
+            foreach (var shoe in imported.Value)
+            {
+                var before = _shoeRepository.Shoes.Count;
+                _shoeRepository.Add(shoe);
+                if (_shoeRepository.Shoes.Count > before)
+                    added++;
+            }
 
-            var saveResult = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
-            Message = saveResult.Success ? imported.Message : saveResult.Message;
+            var saveResult = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
+            Message = saveResult.Success ? $"{added} sneakers added from CSV." : saveResult.Message;
         }
         finally
         {
@@ -211,6 +271,9 @@ public partial class CollectionViewModel : ViewModelBase
 
         EditBrand = SelectedShoe.Brand;
         EditModel = SelectedShoe.Model;
+        EditGroup = SelectedShoe.Group;
+        EditStock = SelectedShoe.Stock;
+        EditPrice = SelectedShoe.Price;
         EditImagePath = SelectedShoe.ImagePath;
 
         IsEditPanelVisible = true;
@@ -236,6 +299,9 @@ public partial class CollectionViewModel : ViewModelBase
             Id = SelectedShoe.Id,
             Brand = EditBrand.Trim(),
             Model = EditModel.Trim(),
+            Group = string.IsNullOrWhiteSpace(EditGroup) ? "Sneakers" : EditGroup.Trim(),
+            Stock = EditStock,
+            Price = EditPrice,
             ImagePath = EditImagePath.Trim()
         };
 
@@ -255,10 +321,13 @@ public partial class CollectionViewModel : ViewModelBase
 
         SelectedShoe.Brand = updated.Brand;
         SelectedShoe.Model = updated.Model;
+        SelectedShoe.Group = updated.Group;
+        SelectedShoe.Stock = updated.Stock;
+        SelectedShoe.Price = updated.Price;
         SelectedShoe.ImagePath = updated.ImagePath;
         SelectedShoe.Picture = ImageHelper.LoadShoePicture(SelectedShoe);
 
-        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+        var result = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
         IsEditPanelVisible = false;
         Message = result.Success ? "Sneaker updated." : result.Message;
     }
@@ -283,7 +352,7 @@ public partial class CollectionViewModel : ViewModelBase
         _shoeRepository.Remove(SelectedShoe.Id);
         SelectedShoe = null;
 
-        var result = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+        var result = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
         Message = result.Success ? $"Deleted: {deletedInfo}." : result.Message;
     }
 

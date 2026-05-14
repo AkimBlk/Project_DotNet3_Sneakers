@@ -36,6 +36,15 @@
                 <TextBlock Text="Identifier" Classes="muted" />
                 <TextBlock Text="{Binding MyShoe.Id}" TextWrapping="Wrap" />
             </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="Group" Classes="muted" />
+                <TextBlock Text="{Binding MyShoe.Group}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="Stock / price" Classes="muted" />
+                <TextBlock Text="{Binding MyShoe.Stock, StringFormat={}{0} items}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding MyShoe.Price, StringFormat={}{0:C}}" TextWrapping="Wrap" />
+            </StackPanel>
         </StackPanel>
     </Grid>
 </UserControl>

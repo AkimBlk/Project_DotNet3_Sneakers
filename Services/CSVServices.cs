@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -12,12 +13,18 @@ namespace MyProjectBase.Services;
 public interface ICsvService
 {
     Task<ServiceResult<List<Shoe>>> LoadDataAsync(CancellationToken cancellationToken = default);
-    Task<ServiceResult> SaveDataAsync(IEnumerable<Shoe> data, CancellationToken cancellationToken = default);
+    Task<ServiceResult> SaveDataAsync(IEnumerable<Shoe> data, CsvExportOptions options, CancellationToken cancellationToken = default);
+}
+
+public sealed record CsvExportOptions(bool Id, bool Brand, bool Model, bool Group, bool Stock, bool Price, bool ImagePath)
+{
+    public static CsvExportOptions All { get; } = new(true, true, true, true, true, true, true);
 }
 
 public sealed class CsvService : ICsvService
 {
-    private static readonly string[] RequiredHeaders = ["Id", "Brand", "Model", "ImagePath"];
+    private static readonly string[] KnownHeaders = ["Id", "Brand", "Model", "Group", "Stock", "Price", "ImagePath"];
+    private static readonly string[] RequiredImportHeaders = ["Brand", "Model"];
     private readonly IAppLogger _logger;
     private sealed record CsvRow(int LineNumber, List<string> Values, string? Error);
 
@@ -60,7 +67,7 @@ public sealed class CsvService : ICsvService
         }
     }
 
-    public async Task<ServiceResult> SaveDataAsync(IEnumerable<Shoe> data, CancellationToken cancellationToken = default)
+    public async Task<ServiceResult> SaveDataAsync(IEnumerable<Shoe> data, CsvExportOptions options, CancellationToken cancellationToken = default)
     {
         var topLevel = GetTopLevel();
         if (topLevel == null)
@@ -68,6 +75,9 @@ public sealed class CsvService : ICsvService
 
         try
         {
+            if (!GetExportHeaders(options).Any())
+                return ServiceResult.Fail("Select at least one CSV column to export.");
+
             var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = "Export CSV collection",
@@ -78,7 +88,7 @@ public sealed class CsvService : ICsvService
             if (file == null)
                 return ServiceResult.Ok("CSV export canceled.");
 
-            var csv = Serialize(data);
+            var csv = Serialize(data, options);
             await using var stream = await file.OpenWriteAsync();
             await using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             await writer.WriteAsync(csv.AsMemory(), cancellationToken);
@@ -121,20 +131,20 @@ public sealed class CsvService : ICsvService
             return ServiceResult<List<Shoe>>.Fail("Corrupted CSV: duplicated columns in header.");
 
         var unexpectedHeaders = headers
-            .Where(header => !RequiredHeaders.Any(required => required.Equals(header, StringComparison.OrdinalIgnoreCase)))
+            .Where(header => !KnownHeaders.Any(required => required.Equals(header, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         if (unexpectedHeaders.Count > 0)
             return ServiceResult<List<Shoe>>.Fail($"Corrupted CSV: unknown columns: {string.Join(", ", unexpectedHeaders)}.");
 
-        var missingHeaders = RequiredHeaders
+        var missingHeaders = RequiredImportHeaders
             .Where(required => !headers.Any(header => header.Equals(required, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         if (missingHeaders.Count > 0)
             return ServiceResult<List<Shoe>>.Fail($"Corrupted CSV: missing columns: {string.Join(", ", missingHeaders)}.");
 
-        var requiredIndexes = RequiredHeaders
+        var requiredIndexes = RequiredImportHeaders
             .Select(required => headers.FindIndex(header => header.Equals(required, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
 
@@ -160,6 +170,9 @@ public sealed class CsvService : ICsvService
                 Id = GetValue(headers, row, "Id"),
                 Brand = GetValue(headers, row, "Brand").Trim(),
                 Model = GetValue(headers, row, "Model").Trim(),
+                Group = GetValue(headers, row, "Group").Trim(),
+                Stock = TryParseInt(GetValue(headers, row, "Stock")),
+                Price = TryParseDecimal(GetValue(headers, row, "Price")),
                 ImagePath = GetValue(headers, row, "ImagePath").Trim()
             };
 
@@ -201,22 +214,15 @@ public sealed class CsvService : ICsvService
         return ServiceResult<List<Shoe>>.Ok(shoes, $"{shoes.Count} sneakers imported.");
     }
 
-    private static string Serialize(IEnumerable<Shoe> data)
+    private static string Serialize(IEnumerable<Shoe> data, CsvExportOptions options)
     {
+        var headers = GetExportHeaders(options).ToArray();
         var builder = new StringBuilder();
-        builder.AppendLine(string.Join(';', RequiredHeaders));
+        builder.AppendLine(string.Join(';', headers));
 
         foreach (var shoe in data)
         {
-            var values = new[]
-            {
-                shoe.Id,
-                shoe.Brand,
-                shoe.Model,
-                shoe.ImagePath
-            };
-
-            builder.AppendLine(string.Join(';', values.Select(Escape)));
+            builder.AppendLine(string.Join(';', headers.Select(header => Escape(GetExportValue(shoe, header)))));
         }
 
         return builder.ToString();
@@ -312,10 +318,50 @@ public sealed class CsvService : ICsvService
     {
         var index = headers
             .Select((header, idx) => new { header, idx })
-            .First(item => item.header.Equals(name, StringComparison.OrdinalIgnoreCase))
-            .idx;
+            .FirstOrDefault(item => item.header.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?.idx ?? -1;
 
-        return index < row.Count ? row[index] : string.Empty;
+        return index >= 0 && index < row.Count ? row[index] : string.Empty;
+    }
+
+    private static IEnumerable<string> GetExportHeaders(CsvExportOptions options)
+    {
+        if (options.Id) yield return "Id";
+        if (options.Brand) yield return "Brand";
+        if (options.Model) yield return "Model";
+        if (options.Group) yield return "Group";
+        if (options.Stock) yield return "Stock";
+        if (options.Price) yield return "Price";
+        if (options.ImagePath) yield return "ImagePath";
+    }
+
+    private static string GetExportValue(Shoe shoe, string header)
+    {
+        return header switch
+        {
+            "Id" => shoe.Id,
+            "Brand" => shoe.Brand,
+            "Model" => shoe.Model,
+            "Group" => shoe.Group,
+            "Stock" => shoe.Stock.ToString(CultureInfo.InvariantCulture),
+            "Price" => shoe.Price.ToString(CultureInfo.InvariantCulture),
+            "ImagePath" => shoe.ImagePath,
+            _ => string.Empty
+        };
+    }
+
+    private static int TryParseInt(string value)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
+    }
+
+    private static decimal TryParseDecimal(string value)
+    {
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
     }
 
     private static TopLevel? GetTopLevel()

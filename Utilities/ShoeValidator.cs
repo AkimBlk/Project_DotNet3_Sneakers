@@ -16,6 +16,12 @@ public static class ShoeValidator
         if (string.IsNullOrWhiteSpace(shoe.Model))
             errors.Add("Model is required.");
 
+        if (shoe.Stock < 0)
+            errors.Add("Stock cannot be negative.");
+
+        if (shoe.Price < 0)
+            errors.Add("Price cannot be negative.");
+
         if (!string.IsNullOrWhiteSpace(shoe.ImagePath) &&
             !Uri.TryCreate(shoe.ImagePath, UriKind.Absolute, out _))
         {

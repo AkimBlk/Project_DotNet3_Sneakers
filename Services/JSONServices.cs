@@ -8,8 +8,8 @@ namespace MyProjectBase.Services;
 
 public interface IJsonShoeService
 {
-    Task<ServiceResult<List<Shoe>>> GetShoesAsync(CancellationToken cancellationToken = default);
-    Task<ServiceResult> SetShoesAsync(IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default);
+    Task<ServiceResult<List<Shoe>>> GetShoesAsync(string collectionKey, CancellationToken cancellationToken = default);
+    Task<ServiceResult> SetShoesAsync(string collectionKey, IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonShoeService : IJsonShoeService
@@ -34,9 +34,9 @@ public sealed class JsonShoeService : IJsonShoeService
         };
     }
 
-    public async Task<ServiceResult<List<Shoe>>> GetShoesAsync(CancellationToken cancellationToken = default)
+    public async Task<ServiceResult<List<Shoe>>> GetShoesAsync(string collectionKey, CancellationToken cancellationToken = default)
     {
-        const string fileName = "MyShoess.json";
+        var fileName = GetFileName(collectionKey);
         var url = $"{_baseUrl}?FileName={Uri.EscapeDataString(fileName)}";
 
         try
@@ -84,7 +84,7 @@ public sealed class JsonShoeService : IJsonShoeService
         }
     }
 
-    public async Task<ServiceResult> SetShoesAsync(IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default)
+    public async Task<ServiceResult> SetShoesAsync(string collectionKey, IEnumerable<Shoe> shoes, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -101,7 +101,7 @@ public sealed class JsonShoeService : IJsonShoeService
 
             using var content = new MultipartFormDataContent
             {
-                { fileContent, "file", "MyShoess.json" }
+                { fileContent, "file", GetFileName(collectionKey) }
             };
 
             using var response = await SendWithRetryAsync(
@@ -132,6 +132,17 @@ public sealed class JsonShoeService : IJsonShoeService
             _logger.Error(ex, "Unexpected JSON save error.");
             return ServiceResult.Fail($"JSON save error: {ex.Message}");
         }
+    }
+
+    private static string GetFileName(string collectionKey)
+    {
+        var normalized = string.Concat(collectionKey
+            .Where(character => char.IsLetterOrDigit(character) || character is '-' or '_'))
+            .Trim();
+
+        return string.IsNullOrWhiteSpace(normalized)
+            ? "sneakers-guest.json"
+            : $"sneakers-{normalized}.json";
     }
 
     private static async Task<HttpResponseMessage> SendWithRetryAsync(

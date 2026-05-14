@@ -32,14 +32,26 @@
 
         <Border Grid.Row="1" Grid.Column="0" Classes="panel" Padding="0">
             <Grid RowDefinitions="Auto,*">
-                <WrapPanel Grid.Row="0" Margin="12" ItemSpacing="8" LineSpacing="8">
-                    <Button Content="Load JSON" Classes="primary" Command="{Binding LoadJsonCommand}" />
-                    <Button Content="Add" Command="{Binding AddShoeCommand}" />
-                    <Button Content="Edit" Command="{Binding OpenEditPanelCommand}" />
-                    <Button Content="Delete" Classes="danger" Command="{Binding DeleteSelectedShoeCommand}" />
-                    <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
-                    <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" />
-                </WrapPanel>
+                <StackPanel Grid.Row="0" Margin="12" Spacing="10">
+                    <WrapPanel ItemSpacing="8" LineSpacing="8">
+                        <Button Content="Load JSON" Classes="primary" Command="{Binding LoadJsonCommand}" />
+                        <Button Content="Add" Command="{Binding AddShoeCommand}" />
+                        <Button Content="Edit" Command="{Binding OpenEditPanelCommand}" />
+                        <Button Content="Delete" Classes="danger" Command="{Binding DeleteSelectedShoeCommand}" />
+                        <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+                        <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" />
+                    </WrapPanel>
+
+                    <WrapPanel ItemSpacing="12" LineSpacing="6">
+                        <CheckBox Content="ID" IsChecked="{Binding ExportId}" />
+                        <CheckBox Content="Brand" IsChecked="{Binding ExportBrand}" />
+                        <CheckBox Content="Model" IsChecked="{Binding ExportModel}" />
+                        <CheckBox Content="Group" IsChecked="{Binding ExportGroup}" />
+                        <CheckBox Content="Stock" IsChecked="{Binding ExportStock}" />
+                        <CheckBox Content="Price" IsChecked="{Binding ExportPrice}" />
+                        <CheckBox Content="Image" IsChecked="{Binding ExportImagePath}" />
+                    </WrapPanel>
+                </StackPanel>
 
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding MyObservableShoes}"
@@ -87,6 +99,15 @@
                                                    FontSize="20"
                                                    TextWrapping="Wrap"
                                                    MaxLines="2" />
+                                        <TextBlock Text="{Binding Group, StringFormat=Group : {0}}"
+                                                   Classes="muted"
+                                                   FontSize="13" />
+                                        <TextBlock Text="{Binding Stock, StringFormat=Stock : {0}}"
+                                                   Classes="muted"
+                                                   FontSize="13" />
+                                        <TextBlock Text="{Binding Price, StringFormat=Price : {0:C}}"
+                                                   Classes="muted"
+                                                   FontSize="13" />
                                         <TextBlock Text="{Binding Id, StringFormat=ID : {0}}"
                                                    Classes="muted"
                                                    FontSize="13"
@@ -115,41 +136,59 @@
         <Border Grid.Row="1"
                 Grid.Column="1"
                 Classes="panel"
-                Width="320"
+                Width="360"
                 IsVisible="{Binding IsAddPanelVisible}">
-            <StackPanel Spacing="10">
-                <TextBlock Text="Add a sneaker" FontWeight="Bold" FontSize="18" />
-                <TextBlock Text="Brand" Classes="muted" />
-                <TextBox Text="{Binding NewBrand, Mode=TwoWay}" Watermark="Nike" />
-                <TextBlock Text="Model" Classes="muted" />
-                <TextBox Text="{Binding NewModel, Mode=TwoWay}" Watermark="Air Max" />
-                <TextBlock Text="Image" Classes="muted" />
-                <ComboBox ItemsSource="{Binding AvailableImages}"
-                          SelectedItem="{Binding NewImagePath, Mode=TwoWay}"
-                          MaxDropDownHeight="220" />
-                <Button Content="Save" Classes="primary" Command="{Binding ConfirmAddCommand}" />
-                <Button Content="Cancel" Command="{Binding CancelAddCommand}" />
-            </StackPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Add a sneaker" FontWeight="Bold" FontSize="18" />
+                    <TextBlock Text="Brand" Classes="muted" />
+                    <TextBox Text="{Binding NewBrand, Mode=TwoWay}" Watermark="Nike" />
+                    <TextBlock Text="Model" Classes="muted" />
+                    <TextBox Text="{Binding NewModel, Mode=TwoWay}" Watermark="Air Max" />
+                    <TextBlock Text="Group" Classes="muted" />
+                    <TextBox Text="{Binding NewGroup, Mode=TwoWay}" Watermark="Sneakers" />
+                    <TextBlock Text="Stock" Classes="muted" />
+                    <NumericUpDown Value="{Binding NewStock, Mode=TwoWay}" Minimum="0" />
+                    <TextBlock Text="Price" Classes="muted" />
+                    <NumericUpDown Value="{Binding NewPrice, Mode=TwoWay}" Minimum="0" FormatString="F2" />
+                    <TextBlock Text="Image" Classes="muted" />
+                    <ComboBox ItemsSource="{Binding AvailableImages}"
+                              SelectedItem="{Binding NewImagePath, Mode=TwoWay}"
+                              MaxDropDownHeight="180" />
+                    <Button Content="Save" Classes="primary" Command="{Binding ConfirmAddCommand}" />
+                    <Button Content="Cancel" Command="{Binding CancelAddCommand}" />
+                </StackPanel>
+            </ScrollViewer>
         </Border>
 
         <Border Grid.Row="1"
                 Grid.Column="1"
                 Classes="panel"
-                Width="320"
+                Width="360"
                 IsVisible="{Binding IsEditPanelVisible}">
-            <StackPanel Spacing="10">
-                <TextBlock Text="Edit sneaker" FontWeight="Bold" FontSize="18" />
-                <TextBlock Text="Brand" Classes="muted" />
-                <TextBox Text="{Binding EditBrand, Mode=TwoWay}" />
-                <TextBlock Text="Model" Classes="muted" />
-                <TextBox Text="{Binding EditModel, Mode=TwoWay}" />
-                <TextBlock Text="Image" Classes="muted" />
-                <ComboBox ItemsSource="{Binding AvailableImages}"
-                          SelectedItem="{Binding EditImagePath, Mode=TwoWay}"
-                          MaxDropDownHeight="220" />
-                <Button Content="Save" Classes="primary" Command="{Binding ConfirmEditCommand}" />
-                <Button Content="Cancel" Command="{Binding CancelEditCommand}" />
-            </StackPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Edit sneaker" FontWeight="Bold" FontSize="18" />
+                    <TextBlock Text="Brand" Classes="muted" />
+                    <TextBox Text="{Binding EditBrand, Mode=TwoWay}" />
+                    <TextBlock Text="Model" Classes="muted" />
+                    <TextBox Text="{Binding EditModel, Mode=TwoWay}" />
+                    <TextBlock Text="Group" Classes="muted" />
+                    <TextBox Text="{Binding EditGroup, Mode=TwoWay}" />
+                    <TextBlock Text="Stock" Classes="muted" />
+                    <NumericUpDown Value="{Binding EditStock, Mode=TwoWay}" Minimum="0" />
+                    <TextBlock Text="Price" Classes="muted" />
+                    <NumericUpDown Value="{Binding EditPrice, Mode=TwoWay}" Minimum="0" FormatString="F2" />
+                    <TextBlock Text="Image" Classes="muted" />
+                    <ComboBox ItemsSource="{Binding AvailableImages}"
+                              SelectedItem="{Binding EditImagePath, Mode=TwoWay}"
+                              MaxDropDownHeight="180" />
+                    <Button Content="Save" Classes="primary" Command="{Binding ConfirmEditCommand}" />
+                    <Button Content="Cancel" Command="{Binding CancelEditCommand}" />
+                </StackPanel>
+            </ScrollViewer>
         </Border>
     </Grid>
 </UserControl>

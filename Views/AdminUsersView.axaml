@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyProjectBase.ViewModels"
+             xmlns:models="using:MyProjectBase.Models"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="1000"
+             d:DesignHeight="620"
+             x:Class="MyProjectBase.Views.AdminUsersView"
+             x:DataType="vm:AdminUsersViewModel">
+
+    <Design.DataContext>
+        <vm:AdminUsersViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,360" RowSpacing="12" ColumnSpacing="12" Margin="16">
+        <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="User administration" Classes="title" />
+                    <TextBlock Text="{Binding Message}" Classes="status" TextWrapping="Wrap" />
+                </StackPanel>
+                <ProgressBar Grid.Column="1"
+                             Width="160"
+                             Height="4"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsBusy}"
+                             VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="0" Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+                <WrapPanel Grid.Row="0" Margin="12" ItemSpacing="8" LineSpacing="8">
+                    <Button Content="Refresh" Classes="primary" Command="{Binding LoadUsersCommand}" />
+                    <Button Content="New user" Command="{Binding NewUserCommand}" />
+                    <Button Content="Delete" Classes="danger" Command="{Binding DeleteUserCommand}" />
+                </WrapPanel>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Users}"
+                         SelectedItem="{Binding SelectedUser}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.VerticalScrollBarVisibility="Visible">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:UserAccount">
+                            <Border Classes="listItem">
+                                <Grid ColumnDefinitions="2*,2*,Auto" ColumnSpacing="14">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Email}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="{Binding FirstName, StringFormat=First name: {0}}" Classes="muted" />
+                                        <TextBlock Text="{Binding LastName, StringFormat=Last name: {0}}" Classes="muted" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Role}"
+                                               Classes="status"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="1" Classes="panel">
+            <StackPanel Spacing="10">
+                <TextBlock Text="Account" FontWeight="Bold" FontSize="18" />
+                <TextBlock Text="First name" Classes="muted" />
+                <TextBox Text="{Binding FirstName, Mode=TwoWay}" />
+                <TextBlock Text="Last name" Classes="muted" />
+                <TextBox Text="{Binding LastName, Mode=TwoWay}" />
+                <TextBlock Text="Display name" Classes="muted" />
+                <TextBox Text="{Binding DisplayName, Mode=TwoWay}" />
+                <TextBlock Text="Email" Classes="muted" />
+                <TextBox Text="{Binding Email, Mode=TwoWay}" />
+                <TextBlock Text="Role" Classes="muted" />
+                <ComboBox ItemsSource="{Binding Roles}" SelectedItem="{Binding Role, Mode=TwoWay}" />
+                <TextBlock Text="Password" Classes="muted" />
+                <TextBox PasswordChar="*" Text="{Binding Password, Mode=TwoWay}" Watermark="New password or leave empty" />
+                <Button Content="Save account" Classes="primary" Command="{Binding SaveUserCommand}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

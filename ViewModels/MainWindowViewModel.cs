@@ -63,14 +63,18 @@ public partial class MainWindowViewModel : ViewModelBase
         _logger = logger;
 
         _scannerManager.CodeReceived += ScannerCodeReceived;
+        SeedDefaultCollection("Default collection loaded.");
         _currentPage = CreateCollectionViewModel();
     }
 
     public bool IsAuthenticated => CurrentUser != null;
+    public bool IsAdmin => CurrentUser?.Role == UserRole.Admin;
+    public string ActiveCollectionKey => CurrentUser?.CollectionKey ?? "guest";
 
     partial void OnCurrentUserChanged(UserAccount? value)
     {
         OnPropertyChanged(nameof(IsAuthenticated));
+        OnPropertyChanged(nameof(IsAdmin));
     }
 
     partial void OnCurrentPageChanging(ViewModelBase? oldValue, ViewModelBase newValue)
@@ -114,7 +118,22 @@ public partial class MainWindowViewModel : ViewModelBase
     private void Logout()
     {
         CurrentUser = null;
+        _shoeRepository.ReplaceAll([]);
+        CurrentPage = CreateCollectionViewModel();
         StatusMessage = "Logged out.";
+    }
+
+    [RelayCommand]
+    private void GoToAdmin()
+    {
+        if (!IsAdmin)
+        {
+            StatusMessage = "Admin access required.";
+            return;
+        }
+
+        CurrentPage = new AdminUsersViewModel(_userRepository, _dialogService, _logger, CurrentUser!.Id);
+        StatusMessage = "Administration displayed.";
     }
 
     [RelayCommand]
@@ -161,7 +180,18 @@ public partial class MainWindowViewModel : ViewModelBase
             _jsonShoeService,
             _csvService,
             _dialogService,
-            _logger);
+            _logger,
+            () => ActiveCollectionKey);
+    }
+
+    private void SeedDefaultCollection(string message)
+    {
+        var shoes = DefaultShoeCatalog.Create();
+        foreach (var shoe in shoes)
+            shoe.Picture = ImageHelper.LoadShoePicture(shoe);
+
+        _shoeRepository.ReplaceAll(shoes);
+        StatusMessage = message;
     }
 
     private void ApplyUserResult(ServiceResult<UserAccount> result)
@@ -169,6 +199,8 @@ public partial class MainWindowViewModel : ViewModelBase
         if (result.Success && result.Value != null)
         {
             CurrentUser = result.Value;
+            CurrentPage = CreateCollectionViewModel();
+            _ = LoadActiveCollectionAsync();
             LoginEmail = string.Empty;
             RegisterEmail = string.Empty;
             RegisterDisplayName = string.Empty;
@@ -234,7 +266,7 @@ public partial class MainWindowViewModel : ViewModelBase
             shoe.Picture = ImageHelper.LoadShoePicture(shoe);
             _shoeRepository.Add(shoe);
 
-            var saveResult = await _jsonShoeService.SetShoesAsync(_shoeRepository.Shoes, CancellationToken);
+            var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
             StatusMessage = saveResult.Success
                 ? $"Sneaker added from scanner: {shoe.Brand} {shoe.Model}."
                 : saveResult.Message;
@@ -248,6 +280,52 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _logger.Error(ex, "Scanner processing error.");
             StatusMessage = "Error while processing the scan.";
+        }
+    }
+
+    private async Task LoadActiveCollectionAsync()
+    {
+        if (!IsAuthenticated)
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _jsonShoeService.GetShoesAsync(ActiveCollectionKey, CancellationToken);
+            if (!result.Success || result.Value == null)
+            {
+                if (_shoeRepository.Shoes.Count == 0)
+                    SeedDefaultCollection($"Default collection loaded. {result.Message}");
+                else
+                    StatusMessage = result.Message;
+
+                return;
+            }
+
+            if (result.Value.Count == 0)
+            {
+                SeedDefaultCollection("New account initialized with the default collection.");
+                var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
+                if (!saveResult.Success)
+                    StatusMessage = saveResult.Message;
+
+                return;
+            }
+
+            foreach (var shoe in result.Value)
+                shoe.Picture = ImageHelper.LoadShoePicture(shoe);
+
+            _shoeRepository.ReplaceAll(result.Value);
+            StatusMessage = result.Message;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Active collection load failed.");
+            StatusMessage = "Unable to load the active collection.";
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
