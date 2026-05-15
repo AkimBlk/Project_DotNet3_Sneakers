@@ -118,9 +118,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private void Logout()
     {
         CurrentUser = null;
-        _shoeRepository.ReplaceAll([]);
+        SeedDefaultCollection("Logged out. Default collection loaded.");
         CurrentPage = CreateCollectionViewModel();
-        StatusMessage = "Logged out.";
     }
 
     [RelayCommand]
@@ -146,7 +145,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        CurrentPage = new CollectionDetailsViewModel(shoe);
+        CurrentPage = new CollectionDetailsViewModel(shoe, BackToMainCommand);
     }
 
     [RelayCommand]
@@ -224,7 +223,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var existingByRawId = _shoeRepository.FindById(raw);
         if (existingByRawId != null)
         {
-            CurrentPage = new CollectionDetailsViewModel(existingByRawId);
+            CurrentPage = new CollectionDetailsViewModel(existingByRawId, BackToMainCommand);
             StatusMessage = "Sneaker found from scan.";
             return;
         }
@@ -258,7 +257,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (duplicate != null)
             {
-                CurrentPage = new CollectionDetailsViewModel(duplicate);
+                CurrentPage = new CollectionDetailsViewModel(duplicate, BackToMainCommand);
                 StatusMessage = "Sneaker already exists.";
                 return;
             }

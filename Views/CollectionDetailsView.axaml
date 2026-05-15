@@ -13,8 +13,16 @@
         <vm:CollectionDetailsViewModel />
     </Design.DataContext>
 
-    <Grid Margin="24" ColumnDefinitions="*,320" ColumnSpacing="24">
-        <Border Grid.Column="0" Classes="panel">
+    <Grid Margin="24" RowDefinitions="Auto,*" ColumnDefinitions="*,320" RowSpacing="16" ColumnSpacing="24">
+        <Button Grid.Row="0"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                Content="Back to collection"
+                Command="{Binding BackCommand}"
+                HorizontalAlignment="Left"
+                Classes="primary" />
+
+        <Border Grid.Row="1" Grid.Column="0" Classes="panel">
             <Image Source="{Binding MyShoe.Picture}"
                    Stretch="Uniform"
                    HorizontalAlignment="Stretch"
@@ -22,7 +30,7 @@
                    MinHeight="360" />
         </Border>
 
-        <StackPanel Grid.Column="1" Spacing="18" VerticalAlignment="Center">
+        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="18" VerticalAlignment="Center">
             <TextBlock Text="Sneaker details" Classes="title" />
             <StackPanel Spacing="6">
                 <TextBlock Text="Brand" Classes="muted" />
@@ -43,7 +51,7 @@
             <StackPanel Spacing="6">
                 <TextBlock Text="Stock / price" Classes="muted" />
                 <TextBlock Text="{Binding MyShoe.Stock, StringFormat={}{0} items}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding MyShoe.Price, StringFormat={}{0:C}}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding MyShoe.Price, StringFormat={}{0:0.00} €}" TextWrapping="Wrap" />
             </StackPanel>
         </StackPanel>
     </Grid>

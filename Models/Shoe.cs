@@ -14,7 +14,7 @@ public partial class Shoe : ObservableObject
     [ObservableProperty] private decimal _price;
     [ObservableProperty] private string _imagePath = string.Empty;
 
-    [JsonIgnore]
+    [property: JsonIgnore]
     [ObservableProperty]
     private IImage? _picture;
 }

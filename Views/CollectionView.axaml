@@ -42,15 +42,18 @@
                         <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" />
                     </WrapPanel>
 
-                    <WrapPanel ItemSpacing="12" LineSpacing="6">
-                        <CheckBox Content="ID" IsChecked="{Binding ExportId}" />
-                        <CheckBox Content="Brand" IsChecked="{Binding ExportBrand}" />
-                        <CheckBox Content="Model" IsChecked="{Binding ExportModel}" />
-                        <CheckBox Content="Group" IsChecked="{Binding ExportGroup}" />
-                        <CheckBox Content="Stock" IsChecked="{Binding ExportStock}" />
-                        <CheckBox Content="Price" IsChecked="{Binding ExportPrice}" />
-                        <CheckBox Content="Image" IsChecked="{Binding ExportImagePath}" />
-                    </WrapPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Visible fields / CSV export" Classes="muted" />
+                        <WrapPanel ItemSpacing="12" LineSpacing="6">
+                            <CheckBox Content="ID (CSV)" IsChecked="{Binding ExportId}" />
+                            <CheckBox Content="Brand" IsChecked="{Binding ExportBrand}" />
+                            <CheckBox Content="Model" IsChecked="{Binding ExportModel}" />
+                            <CheckBox Content="Group" IsChecked="{Binding ExportGroup}" />
+                            <CheckBox Content="Stock" IsChecked="{Binding ExportStock}" />
+                            <CheckBox Content="Price" IsChecked="{Binding ExportPrice}" />
+                            <CheckBox Content="Image" IsChecked="{Binding ExportImagePath}" />
+                        </WrapPanel>
+                    </StackPanel>
                 </StackPanel>
 
                 <ListBox Grid.Row="1"
@@ -75,7 +78,8 @@
                                             Grid.ColumnSpan="2"
                                             Background="Black"
                                             MinHeight="280"
-                                            MaxHeight="320">
+                                            MaxHeight="320"
+                                            IsVisible="{Binding DataContext.ExportImagePath, ElementName=Collection}">
                                         <Image Width="520"
                                            Height="300"
                                            Stretch="Uniform"
@@ -93,27 +97,26 @@
                                                    FontSize="28"
                                                    FontWeight="Bold"
                                                    TextWrapping="NoWrap"
-                                                   TextTrimming="CharacterEllipsis" />
+                                                   TextTrimming="CharacterEllipsis"
+                                                   IsVisible="{Binding DataContext.ExportBrand, ElementName=Collection}" />
                                         <TextBlock Text="{Binding Model}"
                                                    Classes="muted"
                                                    FontSize="20"
                                                    TextWrapping="Wrap"
-                                                   MaxLines="2" />
+                                                   MaxLines="2"
+                                                   IsVisible="{Binding DataContext.ExportModel, ElementName=Collection}" />
                                         <TextBlock Text="{Binding Group, StringFormat=Group : {0}}"
                                                    Classes="muted"
-                                                   FontSize="13" />
+                                                   FontSize="13"
+                                                   IsVisible="{Binding DataContext.ExportGroup, ElementName=Collection}" />
                                         <TextBlock Text="{Binding Stock, StringFormat=Stock : {0}}"
                                                    Classes="muted"
-                                                   FontSize="13" />
-                                        <TextBlock Text="{Binding Price, StringFormat=Price : {0:C}}"
-                                                   Classes="muted"
-                                                   FontSize="13" />
-                                        <TextBlock Text="{Binding Id, StringFormat=ID : {0}}"
+                                                   FontSize="13"
+                                                   IsVisible="{Binding DataContext.ExportStock, ElementName=Collection}" />
+                                        <TextBlock Text="{Binding Price, StringFormat=Price : {0:0.00} €}"
                                                    Classes="muted"
                                                    FontSize="13"
-                                                   MaxLines="1"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   TextWrapping="Wrap" />
+                                                   IsVisible="{Binding DataContext.ExportPrice, ElementName=Collection}" />
                                     </StackPanel>
 
                                     <Button Grid.Row="1"
@@ -150,7 +153,7 @@
                     <TextBox Text="{Binding NewGroup, Mode=TwoWay}" Watermark="Sneakers" />
                     <TextBlock Text="Stock" Classes="muted" />
                     <NumericUpDown Value="{Binding NewStock, Mode=TwoWay}" Minimum="0" />
-                    <TextBlock Text="Price" Classes="muted" />
+                    <TextBlock Text="Price (€)" Classes="muted" />
                     <NumericUpDown Value="{Binding NewPrice, Mode=TwoWay}" Minimum="0" FormatString="F2" />
                     <TextBlock Text="Image" Classes="muted" />
                     <ComboBox ItemsSource="{Binding AvailableImages}"
@@ -179,7 +182,7 @@
                     <TextBox Text="{Binding EditGroup, Mode=TwoWay}" />
                     <TextBlock Text="Stock" Classes="muted" />
                     <NumericUpDown Value="{Binding EditStock, Mode=TwoWay}" Minimum="0" />
-                    <TextBlock Text="Price" Classes="muted" />
+                    <TextBlock Text="Price (€)" Classes="muted" />
                     <NumericUpDown Value="{Binding EditPrice, Mode=TwoWay}" Minimum="0" FormatString="F2" />
                     <TextBlock Text="Image" Classes="muted" />
                     <ComboBox ItemsSource="{Binding AvailableImages}"
