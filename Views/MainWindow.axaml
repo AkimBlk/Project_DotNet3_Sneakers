@@ -20,7 +20,7 @@
                     <TextBlock Text="Sneaker Collection | Interface version 2.0 | Akim Belkouaci / Mohamed Atouli"
                                Classes="title"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Avalonia • .NET 10 • JSON • CSV • Scanner • Comptes"
+                    <TextBlock Text="Avalonia • .NET 10 • JSON • CSV • Scanner • Accounts"
                                Classes="muted"
                                TextWrapping="Wrap" />
                 </StackPanel>

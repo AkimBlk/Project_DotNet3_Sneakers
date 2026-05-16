@@ -54,6 +54,48 @@
                             <CheckBox Content="Image" IsChecked="{Binding ExportImagePath}" />
                         </WrapPanel>
                     </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Stock by group" Classes="muted" />
+                        <ItemsControl ItemsSource="{Binding StockByGroup}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel ItemSpacing="8" LineSpacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:GroupStockSummary">
+                                    <Border Background="Black"
+                                            BorderBrush="#D2B48C"
+                                            BorderThickness="1"
+                                            CornerRadius="3"
+                                            Padding="8,5"
+                                            Width="170">
+                                        <Grid RowDefinitions="Auto,4" ColumnDefinitions="*,Auto" RowSpacing="4" ColumnSpacing="8">
+                                            <TextBlock Text="{Binding Group}"
+                                                       Classes="muted"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Stock}"
+                                                       Classes="muted"
+                                                       FontSize="12"
+                                                       HorizontalAlignment="Right" />
+                                            <Border Grid.Row="1"
+                                                    Grid.Column="0"
+                                                    Grid.ColumnSpan="2"
+                                                    Width="{Binding BarWidth}"
+                                                    MaxWidth="150"
+                                                    Height="4"
+                                                    HorizontalAlignment="Left"
+                                                    Background="SkyBlue"
+                                                    CornerRadius="2" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <ListBox Grid.Row="1"
@@ -145,6 +187,8 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="10">
                     <TextBlock Text="Add a sneaker" FontWeight="Bold" FontSize="18" />
+                    <TextBlock Text="Identifier" Classes="muted" />
+                    <TextBox Text="{Binding NewId, Mode=TwoWay}" Watermark="Scan code or leave empty" />
                     <TextBlock Text="Brand" Classes="muted" />
                     <TextBox Text="{Binding NewBrand, Mode=TwoWay}" Watermark="Nike" />
                     <TextBlock Text="Model" Classes="muted" />

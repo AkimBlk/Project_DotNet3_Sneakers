@@ -293,20 +293,14 @@ public partial class MainWindowViewModel : ViewModelBase
             var result = await _jsonShoeService.GetShoesAsync(ActiveCollectionKey, CancellationToken);
             if (!result.Success || result.Value == null)
             {
-                if (_shoeRepository.Shoes.Count == 0)
-                    SeedDefaultCollection($"Default collection loaded. {result.Message}");
-                else
-                    StatusMessage = result.Message;
+                await InitializeDefaultRemoteCollectionAsync("No remote collection found; default collection is ready.");
 
                 return;
             }
 
             if (result.Value.Count == 0)
             {
-                SeedDefaultCollection("New account initialized with the default collection.");
-                var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
-                if (!saveResult.Success)
-                    StatusMessage = saveResult.Message;
+                await InitializeDefaultRemoteCollectionAsync("New account initialized with the default collection.");
 
                 return;
             }
@@ -326,6 +320,14 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    private async Task InitializeDefaultRemoteCollectionAsync(string successMessage)
+    {
+        SeedDefaultCollection(successMessage);
+        var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
+        if (!saveResult.Success)
+            StatusMessage = $"{successMessage} Remote save unavailable.";
     }
 
     protected override void Dispose(bool disposing)
