@@ -13,6 +13,7 @@ namespace MyProjectBase.ViewModels;
 
 public partial class CollectionViewModel : ViewModelBase
 {
+    // ViewModel principal de la collection : il contient les commandes CRUD, CSV et JSON.
     private readonly IShoeRepository _shoeRepository;
     private readonly IJsonShoeService _jsonShoeService;
     private readonly ICsvService _csvService;
@@ -22,6 +23,8 @@ public partial class CollectionViewModel : ViewModelBase
 
     public IRelayCommand<string> FromParentCommand { get; }
     public ObservableCollection<Shoe> MyObservableShoes => _shoeRepository.Shoes;
+
+    // Donnees calculees pour afficher un petit resume du stock par groupe dans l'interface.
     public ObservableCollection<GroupStockSummary> StockByGroup { get; } = [];
 
     [ObservableProperty] private Shoe? _selectedShoe;
@@ -81,6 +84,7 @@ public partial class CollectionViewModel : ViewModelBase
         IAppLogger logger,
         Func<string> collectionKeyProvider)
     {
+        // Le repository expose une ObservableCollection : la liste UI se met a jour par data binding.
         FromParentCommand = fromParentCommand;
         _shoeRepository = shoeRepository;
         _jsonShoeService = jsonShoeService;
@@ -88,6 +92,7 @@ public partial class CollectionViewModel : ViewModelBase
         _dialogService = dialogService;
         _logger = logger;
         _collectionKeyProvider = collectionKeyProvider;
+        // Ces abonnements gardent le graphique de stock synchronise avec les ajouts/modifications.
         _shoeRepository.Shoes.CollectionChanged += ShoesCollectionChanged;
         foreach (var shoe in _shoeRepository.Shoes)
             shoe.PropertyChanged += ShoePropertyChanged;
@@ -97,6 +102,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task LoadJsonAsync()
     {
+        // Charge depuis le serveur distant la collection associee a l'utilisateur actif.
         IsBusy = true;
         Message = "Loading JSON...";
 
@@ -105,8 +111,11 @@ public partial class CollectionViewModel : ViewModelBase
             var result = await _jsonShoeService.GetShoesAsync(_collectionKeyProvider(), CancellationToken);
             if (!result.Success || result.Value == null)
             {
-                await InitializeDefaultRemoteCollectionAsync("No remote collection found; default collection is ready.");
-
+                // On initialise seulement quand le fichier n'existe pas ; une erreur reseau ne doit pas ecraser les donnees.
+                if (result.Kind == ServiceResultKind.NotFound)
+                    await InitializeDefaultRemoteCollectionAsync("No remote collection found; default collection is ready.");
+                else
+                    Message = result.Message;
                 return;
             }
 
@@ -138,9 +147,22 @@ public partial class CollectionViewModel : ViewModelBase
         Message = "Creating a sneaker.";
     }
 
+    public void UseScannedId(string scannedId)
+    {
+        // Methode appelee par MainWindowViewModel quand le scanner lit un ID pendant un ajout.
+        if (string.IsNullOrWhiteSpace(scannedId))
+            return;
+
+        NewId = scannedId.Trim();
+        IsAddPanelVisible = true;
+        IsEditPanelVisible = false;
+        Message = "Identifier filled from scanner.";
+    }
+
     [RelayCommand]
     private async Task ConfirmAddAsync()
     {
+        // Construit une nouvelle sneaker a partir des champs du formulaire d'ajout.
         var newShoe = new Shoe
         {
             Id = string.IsNullOrWhiteSpace(NewId) ? Guid.NewGuid().ToString() : NewId.Trim(),
@@ -169,6 +191,7 @@ public partial class CollectionViewModel : ViewModelBase
         newShoe.Picture = ImageHelper.LoadShoePicture(newShoe);
         _shoeRepository.Add(newShoe);
 
+        // Apres ajout local, on sauvegarde immediatement la collection distante.
         var result = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
         if (!result.Success)
         {
@@ -196,6 +219,7 @@ public partial class CollectionViewModel : ViewModelBase
 
     private async Task InitializeDefaultRemoteCollectionAsync(string successMessage)
     {
+        // Collection de depart utilisee quand un compte n'a pas encore de fichier JSON distant.
         var defaults = DefaultShoeCatalog.Create();
         foreach (var shoe in defaults)
             shoe.Picture = ImageHelper.LoadShoePicture(shoe);
@@ -210,6 +234,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task ExportCsvAsync()
     {
+        // Les booleens Export* correspondent aux cases cochees dans l'interface.
         IsBusy = true;
         try
         {
@@ -226,6 +251,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task ImportCsvAsync()
     {
+        // L'import ajoute au lieu de remplacer pour respecter le cahier des charges.
         var isConfirmed = await _dialogService.ConfirmAsync("Import this CSV and add its sneakers to the current collection?");
         if (!isConfirmed)
         {
@@ -246,6 +272,7 @@ public partial class CollectionViewModel : ViewModelBase
             var added = 0;
             foreach (var shoe in imported.Value)
             {
+                // Le repository refuse deja les doublons d'ID ; on compte seulement les vrais ajouts.
                 var before = _shoeRepository.Shoes.Count;
                 _shoeRepository.Add(shoe);
                 if (_shoeRepository.Shoes.Count > before)
@@ -264,6 +291,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private void OpenEditPanel()
     {
+        // Copie les valeurs selectionnees dans le formulaire d'edition.
         if (SelectedShoe == null)
         {
             Message = "Select a sneaker to edit.";
@@ -292,6 +320,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task ConfirmEditAsync()
     {
+        // L'ID reste stable pendant une edition : il identifie l'objet collectionne.
         if (SelectedShoe == null)
             return;
 
@@ -328,6 +357,7 @@ public partial class CollectionViewModel : ViewModelBase
         SelectedShoe.ImagePath = updated.ImagePath;
         SelectedShoe.Picture = ImageHelper.LoadShoePicture(SelectedShoe);
 
+        // Sauvegarde distante apres modification.
         var result = await _jsonShoeService.SetShoesAsync(_collectionKeyProvider(), _shoeRepository.Shoes, CancellationToken);
         IsEditPanelVisible = false;
         Message = result.Success ? "Sneaker updated." : result.Message;
@@ -336,6 +366,7 @@ public partial class CollectionViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteSelectedShoeAsync()
     {
+        // Suppression avec confirmation pour eviter une perte accidentelle.
         if (SelectedShoe == null)
         {
             Message = "Select a sneaker to delete.";
@@ -359,6 +390,7 @@ public partial class CollectionViewModel : ViewModelBase
 
     private void ShoesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        // Quand la collection change, on abonne/desabonne les PropertyChanged des sneakers concernees.
         if (e.OldItems != null)
         {
             foreach (Shoe shoe in e.OldItems)
@@ -376,12 +408,14 @@ public partial class CollectionViewModel : ViewModelBase
 
     private void ShoePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Le graphique doit etre recalcule uniquement si le stock ou le groupe change.
         if (e.PropertyName is nameof(Shoe.Group) or nameof(Shoe.Stock))
             RefreshStockChart();
     }
 
     private void RefreshStockChart()
     {
+        // Calcule une largeur de barre proportionnelle au stock maximum.
         var groups = _shoeRepository.Shoes
             .GroupBy(shoe => string.IsNullOrWhiteSpace(shoe.Group) ? "Other" : shoe.Group)
             .Select(group => new { Name = group.Key, Stock = group.Sum(shoe => shoe.Stock) })

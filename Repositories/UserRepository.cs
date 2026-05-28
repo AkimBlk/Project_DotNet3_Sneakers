@@ -1,6 +1,4 @@
 using System.Text.RegularExpressions;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using MyProjectBase.Models;
 using MyProjectBase.Services;
@@ -19,32 +17,34 @@ public interface IUserRepository
 
 public sealed class MongoUserRepository : IUserRepository
 {
+    // Regex simple pour eviter d'envoyer a MongoDB des adresses clairement invalides.
+    private static readonly Regex EmailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
     private readonly IMongoCollection<UserAccount> _users;
-    private readonly IUserRepository _fallback;
     private readonly IAppLogger _logger;
 
     public MongoUserRepository(IAppLogger logger)
+        : this(logger, new AppConfiguration())
+    {
+    }
+
+    public MongoUserRepository(IAppLogger logger, AppConfiguration configuration)
     {
         _logger = logger;
-        _fallback = new BsonUserRepository(logger);
 
-        var connectionString = Environment.GetEnvironmentVariable("SNEAKER_MONGODB_URI") ??
-                               "mongodb://Meeeee:IAmTheBest@185.157.245.38:443/?authSource=admin&tls=true";
-        var databaseName = Environment.GetEnvironmentVariable("SNEAKER_MONGODB_DATABASE") ??
-                           "SneakerCollection";
-
-        var settings = MongoClientSettings.FromConnectionString(connectionString);
+        // La connexion MongoDB est centralisee ici : les ViewModels ne connaissent pas les details serveur.
+        var settings = MongoClientSettings.FromConnectionString(configuration.MongoConnectionString);
         settings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
         settings.ConnectTimeout = TimeSpan.FromSeconds(5);
         settings.SocketTimeout = TimeSpan.FromSeconds(8);
 
         var client = new MongoClient(settings);
-        var database = client.GetDatabase(databaseName);
+        var database = client.GetDatabase(configuration.MongoDatabaseName);
         _users = database.GetCollection<UserAccount>("users");
     }
 
     public async Task<ServiceResult<UserAccount>> RegisterAsync(string email, string displayName, string password, UserRole role = UserRole.User)
     {
+        // Normalisation avant stockage : une meme adresse ne doit pas exister avec deux casses differentes.
         email = email.Trim().ToLowerInvariant();
         displayName = displayName.Trim();
 
@@ -58,6 +58,7 @@ public sealed class MongoUserRepository : IUserRepository
             if (existing != null)
                 return ServiceResult<UserAccount>.Fail("This account already exists.");
 
+            // Le premier compte cree devient admin afin de pouvoir gerer les autres utilisateurs.
             var hasAdmin = await _users.Find(user => user.Role == UserRole.Admin).AnyAsync();
             var account = new UserAccount
             {
@@ -65,6 +66,7 @@ public sealed class MongoUserRepository : IUserRepository
                 Email = email,
                 DisplayName = displayName,
                 Role = hasAdmin ? role : UserRole.Admin,
+                // Le mot de passe n'est jamais stocke en clair : PasswordHasher ajoute un sel et applique PBKDF2.
                 PasswordHash = PasswordHasher.Hash(password),
                 CreatedAtUtc = DateTime.UtcNow
             };
@@ -74,8 +76,8 @@ public sealed class MongoUserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "MongoDB unavailable, using local BSON fallback.");
-            return await _fallback.RegisterAsync(email, displayName, password, role);
+            _logger.Error(ex, "MongoDB unavailable during registration.");
+            return ServiceResult<UserAccount>.Unavailable("MongoDB unavailable. Account creation requires the remote database.");
         }
     }
 
@@ -85,6 +87,7 @@ public sealed class MongoUserRepository : IUserRepository
 
         try
         {
+            // Authentification : on recupere le compte puis on compare le hash du mot de passe.
             var account = await _users.Find(user => user.Email == email).FirstOrDefaultAsync();
             if (account == null || !PasswordHasher.Verify(password, account.PasswordHash))
                 return ServiceResult<UserAccount>.Fail("Invalid credentials.");
@@ -93,8 +96,8 @@ public sealed class MongoUserRepository : IUserRepository
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "MongoDB unavailable, using local BSON login fallback.");
-            return await _fallback.LoginAsync(email, password);
+            _logger.Error(ex, "MongoDB unavailable during login.");
+            return ServiceResult<UserAccount>.Unavailable("MongoDB unavailable. Login requires the remote database.");
         }
     }
 
@@ -102,13 +105,14 @@ public sealed class MongoUserRepository : IUserRepository
     {
         try
         {
+            // Utilise par la page admin pour afficher les comptes existants.
             var users = await _users.Find(_ => true).SortBy(user => user.Email).ToListAsync();
             return ServiceResult<IReadOnlyList<UserAccount>>.Ok(users, $"{users.Count} users loaded.");
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "MongoDB unavailable, using local BSON user list fallback.");
-            return await _fallback.GetUsersAsync();
+            _logger.Error(ex, "MongoDB unavailable while listing users.");
+            return ServiceResult<IReadOnlyList<UserAccount>>.Unavailable("MongoDB unavailable. User administration requires the remote database.");
         }
     }
 
@@ -116,10 +120,11 @@ public sealed class MongoUserRepository : IUserRepository
     {
         try
         {
+            // SaveUserAsync sert autant a modifier un compte qu'a en creer un depuis l'administration.
             user.Email = user.Email.Trim().ToLowerInvariant();
             user.NormalizeNames();
 
-            if (!BsonUserRepository.EmailRegex.IsMatch(user.Email))
+            if (!EmailRegex.IsMatch(user.Email))
                 return ServiceResult<UserAccount>.Fail("Invalid email.");
 
             if (string.IsNullOrWhiteSpace(user.DisplayName))
@@ -143,16 +148,18 @@ public sealed class MongoUserRepository : IUserRepository
                 if (newPassword.Length < 8)
                     return ServiceResult<UserAccount>.Fail("Password is too short (8 characters minimum).");
 
+                // Quand l'admin change le mot de passe, on remplace seulement le hash, jamais par le texte brut.
                 user.PasswordHash = PasswordHasher.Hash(newPassword);
             }
 
+            // ReplaceOne avec IsUpsert permet de faire create/update avec une seule operation MongoDB.
             await _users.ReplaceOneAsync(existing => existing.Id == user.Id, user, new ReplaceOptions { IsUpsert = true });
             return ServiceResult<UserAccount>.Ok(user, "User saved.");
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "MongoDB unavailable, using local BSON save fallback.");
-            return await _fallback.SaveUserAsync(user, newPassword);
+            _logger.Error(ex, "MongoDB unavailable while saving a user.");
+            return ServiceResult<UserAccount>.Unavailable("MongoDB unavailable. User save requires the remote database.");
         }
     }
 
@@ -160,19 +167,21 @@ public sealed class MongoUserRepository : IUserRepository
     {
         try
         {
+            // Suppression definitive du compte utilisateur dans la collection MongoDB "users".
             var result = await _users.DeleteOneAsync(user => user.Id == userId);
             return result.DeletedCount > 0 ? ServiceResult.Ok("User deleted.") : ServiceResult.Fail("User not found.");
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "MongoDB unavailable, using local BSON delete fallback.");
-            return await _fallback.DeleteUserAsync(userId);
+            _logger.Error(ex, "MongoDB unavailable while deleting a user.");
+            return ServiceResult.Unavailable("MongoDB unavailable. User deletion requires the remote database.");
         }
     }
 
     private static ServiceResult ValidateCredentials(string email, string displayName, string password)
     {
-        if (!BsonUserRepository.EmailRegex.IsMatch(email))
+        // Validation minimale avant creation de compte pour donner une erreur claire a l'utilisateur.
+        if (!EmailRegex.IsMatch(email))
             return ServiceResult.Fail("Invalid email.");
 
         if (string.IsNullOrWhiteSpace(displayName))
@@ -181,217 +190,5 @@ public sealed class MongoUserRepository : IUserRepository
         return password.Length < 8
             ? ServiceResult.Fail("Password is too short (8 characters minimum).")
             : ServiceResult.Ok();
-    }
-}
-
-public sealed class BsonUserRepository : IUserRepository
-{
-    internal static readonly Regex EmailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
-    private readonly IAppLogger _logger;
-    private readonly string _filePath;
-
-    public BsonUserRepository(IAppLogger logger)
-    {
-        _logger = logger;
-
-        var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "SneakerCollection",
-            "MongoLikeStore");
-
-        Directory.CreateDirectory(directory);
-        _filePath = Path.Combine(directory, "users.bson");
-    }
-
-    public async Task<ServiceResult<UserAccount>> RegisterAsync(string email, string displayName, string password, UserRole role = UserRole.User)
-    {
-        email = email.Trim().ToLowerInvariant();
-        displayName = displayName.Trim();
-
-        if (!EmailRegex.IsMatch(email))
-            return ServiceResult<UserAccount>.Fail("Invalid email.");
-
-        if (string.IsNullOrWhiteSpace(displayName))
-            return ServiceResult<UserAccount>.Fail("Display name is required.");
-
-        if (password.Length < 8)
-            return ServiceResult<UserAccount>.Fail("Password is too short (8 characters minimum).");
-
-        try
-        {
-            var users = await LoadUsersAsync();
-            if (users.Any(user => user.Email.Equals(email, StringComparison.OrdinalIgnoreCase)))
-                return ServiceResult<UserAccount>.Fail("This account already exists.");
-
-            var account = new UserAccount
-            {
-                Id = Guid.NewGuid().ToString(),
-                Email = email,
-                DisplayName = displayName,
-                Role = users.Any(user => user.Role == UserRole.Admin) ? role : UserRole.Admin,
-                PasswordHash = PasswordHasher.Hash(password)
-            };
-
-            users.Add(account);
-            await SaveUsersAsync(users);
-            return ServiceResult<UserAccount>.Ok(account, $"Logged in: {account.DisplayName}");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "User account creation error.");
-            return ServiceResult<UserAccount>.Fail("Unable to create the user account.");
-        }
-    }
-
-    public async Task<ServiceResult<IReadOnlyList<UserAccount>>> GetUsersAsync()
-    {
-        try
-        {
-            var users = await LoadUsersAsync();
-            return ServiceResult<IReadOnlyList<UserAccount>>.Ok(
-                users.OrderBy(user => user.Email, StringComparer.OrdinalIgnoreCase).ToList(),
-                $"{users.Count} users loaded.");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "User list error.");
-            return ServiceResult<IReadOnlyList<UserAccount>>.Fail("Unable to load users.");
-        }
-    }
-
-    public async Task<ServiceResult<UserAccount>> SaveUserAsync(UserAccount user, string? newPassword = null)
-    {
-        try
-        {
-            var users = await LoadUsersAsync();
-            user.Email = user.Email.Trim().ToLowerInvariant();
-            user.NormalizeNames();
-
-            if (!EmailRegex.IsMatch(user.Email))
-                return ServiceResult<UserAccount>.Fail("Invalid email.");
-
-            if (string.IsNullOrWhiteSpace(user.DisplayName))
-                return ServiceResult<UserAccount>.Fail("Display name is required.");
-
-            if (!string.IsNullOrWhiteSpace(newPassword))
-            {
-                if (newPassword.Length < 8)
-                    return ServiceResult<UserAccount>.Fail("Password is too short (8 characters minimum).");
-
-                user.PasswordHash = PasswordHasher.Hash(newPassword);
-            }
-
-            if (string.IsNullOrWhiteSpace(user.Id))
-            {
-                user.Id = Guid.NewGuid().ToString();
-                user.CreatedAtUtc = DateTime.UtcNow;
-            }
-
-            if (users.Any(existing => existing.Id != user.Id &&
-                                      existing.Email.Equals(user.Email, StringComparison.OrdinalIgnoreCase)))
-                return ServiceResult<UserAccount>.Fail("This email is already used.");
-
-            var index = users.FindIndex(existing => existing.Id == user.Id);
-            if (index >= 0)
-                users[index] = user;
-            else
-                users.Add(user);
-
-            await SaveUsersAsync(users);
-            return ServiceResult<UserAccount>.Ok(user, "User saved.");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "User save error.");
-            return ServiceResult<UserAccount>.Fail("Unable to save the user.");
-        }
-    }
-
-    public async Task<ServiceResult> DeleteUserAsync(string userId)
-    {
-        try
-        {
-            var users = await LoadUsersAsync();
-            var removed = users.RemoveAll(user => user.Id == userId);
-            if (removed == 0)
-                return ServiceResult.Fail("User not found.");
-
-            await SaveUsersAsync(users);
-            return ServiceResult.Ok("User deleted.");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "User delete error.");
-            return ServiceResult.Fail("Unable to delete the user.");
-        }
-    }
-
-    public async Task<ServiceResult<UserAccount>> LoginAsync(string email, string password)
-    {
-        email = email.Trim().ToLowerInvariant();
-
-        try
-        {
-            var users = await LoadUsersAsync();
-            var account = users.FirstOrDefault(user => user.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
-
-            if (account == null || !PasswordHasher.Verify(password, account.PasswordHash))
-                return ServiceResult<UserAccount>.Fail("Invalid credentials.");
-
-            return ServiceResult<UserAccount>.Ok(account, $"Logged in: {account.DisplayName}");
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "User login error.");
-            return ServiceResult<UserAccount>.Fail("User login unavailable.");
-        }
-    }
-
-    private async Task<List<UserAccount>> LoadUsersAsync()
-    {
-        if (!File.Exists(_filePath))
-            return [];
-
-        await using var stream = File.OpenRead(_filePath);
-        var document = BsonSerializer.Deserialize<BsonDocument>(stream);
-
-        return document.TryGetValue("users", out var value) && value.IsBsonArray
-            ? value.AsBsonArray
-                .Select(item => item.AsBsonDocument)
-                .Select(documentUser => new UserAccount
-                {
-                    Id = documentUser.GetValue("id", string.Empty).AsString,
-                    Email = documentUser.GetValue("email", string.Empty).AsString,
-                    DisplayName = documentUser.GetValue("displayName", string.Empty).AsString,
-                    FirstName = documentUser.GetValue("firstName", string.Empty).AsString,
-                    LastName = documentUser.GetValue("lastName", string.Empty).AsString,
-                    Role = Enum.TryParse<UserRole>(documentUser.GetValue("role", nameof(UserRole.User)).AsString, true, out var role)
-                        ? role
-                        : UserRole.User,
-                    PasswordHash = documentUser.GetValue("passwordHash", string.Empty).AsString,
-                    CreatedAtUtc = new DateTime(documentUser.GetValue("createdAtUtcTicks", DateTime.UtcNow.Ticks).ToInt64(), DateTimeKind.Utc)
-                })
-                .ToList()
-            : [];
-    }
-
-    private async Task SaveUsersAsync(IEnumerable<UserAccount> users)
-    {
-        var document = new BsonDocument
-        {
-            ["users"] = new BsonArray(users.Select(user => new BsonDocument
-            {
-                ["id"] = user.Id,
-                ["email"] = user.Email,
-                ["displayName"] = user.DisplayName,
-                ["firstName"] = user.FirstName,
-                ["lastName"] = user.LastName,
-                ["role"] = user.Role.ToString(),
-                ["passwordHash"] = user.PasswordHash,
-                ["createdAtUtcTicks"] = user.CreatedAtUtc.Ticks
-            }))
-        };
-
-        await File.WriteAllBytesAsync(_filePath, document.ToBson());
     }
 }

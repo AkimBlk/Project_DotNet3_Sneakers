@@ -14,6 +14,7 @@
     </Design.DataContext>
 
     <Grid Margin="24" RowDefinitions="Auto,*" ColumnDefinitions="*,320" RowSpacing="16" ColumnSpacing="24">
+        <!-- Bouton retour : BackCommand est fourni par MainWindowViewModel pour revenir a CollectionView. -->
         <Button Grid.Row="0"
                 Grid.Column="0"
                 Grid.ColumnSpan="2"
@@ -22,6 +23,7 @@
                 HorizontalAlignment="Left"
                 Classes="primary" />
 
+        <!-- Image de la sneaker selectionnee. Elle vient de MyShoe.Picture et n'est pas sauvegardee dans le JSON. -->
         <Border Grid.Row="1" Grid.Column="0" Classes="panel">
             <Image Source="{Binding MyShoe.Picture}"
                    Stretch="Uniform"
@@ -30,6 +32,7 @@
                    MinHeight="360" />
         </Border>
 
+        <!-- Details en lecture seule : cette page sert a presenter un objet existant. -->
         <StackPanel Grid.Row="1" Grid.Column="1" Spacing="18" VerticalAlignment="Center">
             <TextBlock Text="Sneaker details" Classes="title" />
             <StackPanel Spacing="6">

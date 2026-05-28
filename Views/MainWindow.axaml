@@ -14,6 +14,7 @@
         MinHeight="680">
 
     <Grid RowDefinitions="Auto,*" Margin="16" RowSpacing="14">
+        <!-- Bandeau du haut : titre, etat global, connexion scanner. -->
         <Border Grid.Row="0" Classes="panel">
             <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="14" ColumnSpacing="18">
                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
@@ -27,16 +28,18 @@
 
                 <StackPanel Grid.Row="0"
                             Grid.Column="1"
-                            Orientation="Horizontal"
                             Spacing="8"
                             HorizontalAlignment="Right">
-                    <Button Content="Connect scanner"
+                    <!-- Ce bouton appelle ConnectScannerCommand dans MainWindowViewModel pour relancer la detection automatique. -->
+                    <Button Content="Reconnect scanner"
                             Classes="primary"
                             Command="{Binding ConnectScannerCommand}" />
+                    <!-- Ce bouton appelle DisconnectScannerCommand pour fermer proprement le port serie. -->
                     <Button Content="Disconnect"
                             Command="{Binding DisconnectScannerCommand}" />
                 </StackPanel>
 
+                <!-- StatusMessage et QrCode viennent du ViewModel et changent automatiquement par data binding. -->
                 <Grid Grid.Row="1"
                       Grid.Column="0"
                       Grid.ColumnSpan="2"
@@ -62,17 +65,20 @@
         </Border>
 
         <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="14">
+            <!-- Menu lateral : connexion, creation de compte, navigation. -->
             <Border Grid.Column="0" Classes="panel">
                 <ScrollViewer>
                     <StackPanel Spacing="18">
                         <StackPanel Spacing="8">
                             <TextBlock Text="User session" FontWeight="Bold" />
+                            <!-- Visible seulement apres connexion grace a IsAuthenticated. -->
                             <TextBlock Text="{Binding CurrentUser.DisplayName, StringFormat=Logged in: {0}}"
                                        IsVisible="{Binding IsAuthenticated}"
                                        Classes="status" />
                             <Button Content="Logout"
                                     IsVisible="{Binding IsAuthenticated}"
                                     Command="{Binding LogoutCommand}" />
+                            <!-- Bouton admin : il existe dans le XAML, mais il n'est visible que si IsAdmin est true. -->
                             <Button Content="Administration"
                                     Classes="primary"
                                     IsVisible="{Binding IsAdmin}"
@@ -81,13 +87,16 @@
 
                         <StackPanel Spacing="8" IsVisible="{Binding !IsAuthenticated}">
                             <TextBlock Text="Login" FontWeight="Bold" />
+                            <!-- Les TextBox remplissent LoginEmail et LoginPassword dans MainWindowViewModel. -->
                             <TextBox Watermark="Email" Text="{Binding LoginEmail, Mode=TwoWay}" />
                             <TextBox Watermark="Password" PasswordChar="*" Text="{Binding LoginPassword, Mode=TwoWay}" />
+                            <!-- Ce bouton appelle LoginCommand, genere par [RelayCommand] sur LoginAsync. -->
                             <Button Content="Login" Classes="primary" Command="{Binding LoginCommand}" />
                         </StackPanel>
 
                         <StackPanel Spacing="8" IsVisible="{Binding !IsAuthenticated}">
                             <TextBlock Text="Create account" FontWeight="Bold" />
+                            <!-- Formulaire d'inscription : les valeurs sont envoyees a RegisterCommand. -->
                             <TextBox Watermark="Name" Text="{Binding RegisterDisplayName, Mode=TwoWay}" />
                             <TextBox Watermark="Email" Text="{Binding RegisterEmail, Mode=TwoWay}" />
                             <TextBox Watermark="Password" PasswordChar="*" Text="{Binding RegisterPassword, Mode=TwoWay}" />
@@ -97,6 +106,7 @@
                         <Border Height="1" Background="#D2B48C" />
 
                         <StackPanel Spacing="8">
+                            <!-- Retour a la page collection principale via BackToMainCommand. -->
                             <Button Content="Collection" Classes="primary" Command="{Binding BackToMainCommand}" />
                         </StackPanel>
                     </StackPanel>
@@ -104,6 +114,7 @@
             </Border>
 
             <Border Grid.Column="1" Classes="panel" Padding="0">
+                <!-- Zone centrale : affiche la page courante, par exemple CollectionView ou AdminUsersView. -->
                 <TransitioningContentControl Content="{Binding CurrentPage}" />
             </Border>
         </Grid>

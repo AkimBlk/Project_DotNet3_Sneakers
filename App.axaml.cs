@@ -15,23 +15,29 @@ public class App : Application
 
     public override void Initialize()
     {
+        // Charge App.axaml : themes, styles et ViewLocator.
         AvaloniaXamlLoader.Load(this);
     }
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Cree les services partages avant de creer la fenetre principale.
         _services = new AppServices();
         RegisterGlobalErrorHandlers(_services.Logger);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             DisableAvaloniaDataAnnotationValidation();
+            var mainViewModel = _services.CreateMainWindowViewModel();
 
+            // DataContext relie MainWindow.axaml a MainWindowViewModel pour tous les bindings.
             desktop.MainWindow = new MainWindow
             {
-                DataContext = _services.CreateMainWindowViewModel()
+                DataContext = mainViewModel
             };
 
+            // Lance l'initialisation controlee du ViewModel apres creation des services.
+            mainViewModel.InitializeAsync().GetAwaiter().GetResult();
             desktop.Exit += (_, _) => _services.Dispose();
         }
 
@@ -40,6 +46,7 @@ public class App : Application
 
     private static void RegisterGlobalErrorHandlers(IAppLogger logger)
     {
+        // Ces handlers evitent qu'une exception non prevue ferme l'application sans trace.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception exception)
@@ -61,6 +68,7 @@ public class App : Application
 
     private static void DisableAvaloniaDataAnnotationValidation()
     {
+        // Evite un conflit connu entre la validation Avalonia et CommunityToolkit.Mvvm.
         var dataValidationPluginsToRemove =
             BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
 

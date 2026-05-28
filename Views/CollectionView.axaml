@@ -15,6 +15,7 @@
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,Auto" RowSpacing="12" ColumnSpacing="12" Margin="16">
+        <!-- En-tete de la page collection : affiche le message du ViewModel et la barre de chargement. -->
         <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Grid.Column="0" Spacing="4">
@@ -33,17 +34,25 @@
         <Border Grid.Row="1" Grid.Column="0" Classes="panel" Padding="0">
             <Grid RowDefinitions="Auto,*">
                 <StackPanel Grid.Row="0" Margin="12" Spacing="10">
+                    <!-- Chaque bouton appelle une commande de CollectionViewModel pour manipuler la collection. -->
                     <WrapPanel ItemSpacing="8" LineSpacing="8">
+                        <!-- LoadJsonCommand recupere le JSON distant de l'utilisateur actif. -->
                         <Button Content="Load JSON" Classes="primary" Command="{Binding LoadJsonCommand}" />
+                        <!-- AddShoeCommand ouvre le panneau de creation a droite. -->
                         <Button Content="Add" Command="{Binding AddShoeCommand}" />
+                        <!-- OpenEditPanelCommand ouvre le formulaire d'edition pour SelectedShoe. -->
                         <Button Content="Edit" Command="{Binding OpenEditPanelCommand}" />
+                        <!-- DeleteSelectedShoeCommand supprime la sneaker selectionnee apres confirmation. -->
                         <Button Content="Delete" Classes="danger" Command="{Binding DeleteSelectedShoeCommand}" />
+                        <!-- ExportCsvCommand exporte les colonnes cochees. -->
                         <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+                        <!-- ImportCsvCommand ajoute les lignes du CSV a la collection actuelle. -->
                         <Button Content="Import CSV" Command="{Binding ImportCsvCommand}" />
                     </WrapPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="Visible fields / CSV export" Classes="muted" />
+                        <!-- Ces cases servent aussi au choix des colonnes exportees en CSV. -->
                         <WrapPanel ItemSpacing="12" LineSpacing="6">
                             <CheckBox Content="ID (CSV)" IsChecked="{Binding ExportId}" />
                             <CheckBox Content="Brand" IsChecked="{Binding ExportBrand}" />
@@ -57,6 +66,7 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="Stock by group" Classes="muted" />
+                        <!-- ItemsControl construit une petite visualisation a partir de StockByGroup. -->
                         <ItemsControl ItemsSource="{Binding StockByGroup}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -98,6 +108,7 @@
                     </StackPanel>
                 </StackPanel>
 
+                <!-- Liste principale : MyObservableShoes est une ObservableCollection, donc l'UI suit les ajouts/suppressions. -->
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding MyObservableShoes}"
                          SelectedItem="{Binding SelectedShoe}"
@@ -106,6 +117,7 @@
                          ScrollViewer.VerticalScrollBarVisibility="Visible"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
+                        <!-- Template d'une sneaker dans la liste. Les bindings lisent les proprietes de Shoe. -->
                         <DataTemplate>
                             <Border Background="Black"
                                     BorderBrush="#D2B48C"
@@ -161,6 +173,7 @@
                                                    IsVisible="{Binding DataContext.ExportPrice, ElementName=Collection}" />
                                     </StackPanel>
 
+                                    <!-- FromParentCommand vient de MainWindowViewModel et change CurrentPage vers CollectionDetailsView. -->
                                     <Button Grid.Row="1"
                                             Grid.Column="1"
                                             Content="Details"
@@ -183,6 +196,7 @@
                 Classes="panel"
                 Width="360"
                 IsVisible="{Binding IsAddPanelVisible}">
+            <!-- Panneau d'ajout : visible quand AddShoeCommand met IsAddPanelVisible a true. -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="10">
@@ -203,6 +217,7 @@
                     <ComboBox ItemsSource="{Binding AvailableImages}"
                               SelectedItem="{Binding NewImagePath, Mode=TwoWay}"
                               MaxDropDownHeight="180" />
+                    <!-- ConfirmAddCommand valide, ajoute au repository, puis sauvegarde le JSON distant. -->
                     <Button Content="Save" Classes="primary" Command="{Binding ConfirmAddCommand}" />
                     <Button Content="Cancel" Command="{Binding CancelAddCommand}" />
                 </StackPanel>
@@ -214,6 +229,7 @@
                 Classes="panel"
                 Width="360"
                 IsVisible="{Binding IsEditPanelVisible}">
+            <!-- Panneau d'edition : visible quand une sneaker est selectionnee puis Edit clique. -->
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="10">
@@ -232,6 +248,7 @@
                     <ComboBox ItemsSource="{Binding AvailableImages}"
                               SelectedItem="{Binding EditImagePath, Mode=TwoWay}"
                               MaxDropDownHeight="180" />
+                    <!-- ConfirmEditCommand garde le meme ID, modifie les champs, puis sauvegarde le JSON distant. -->
                     <Button Content="Save" Classes="primary" Command="{Binding ConfirmEditCommand}" />
                     <Button Content="Cancel" Command="{Binding CancelEditCommand}" />
                 </StackPanel>

@@ -15,6 +15,7 @@
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,360" RowSpacing="12" ColumnSpacing="12" Margin="16">
+        <!-- Page visible uniquement via le bouton Administration de MainWindow, lui-meme visible seulement pour IsAdmin. -->
         <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="panel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="4">
@@ -32,12 +33,17 @@
 
         <Border Grid.Row="1" Grid.Column="0" Classes="panel" Padding="0">
             <Grid RowDefinitions="Auto,*">
+                <!-- Boutons admin : ils appellent les commandes de AdminUsersViewModel. -->
                 <WrapPanel Grid.Row="0" Margin="12" ItemSpacing="8" LineSpacing="8">
+                    <!-- Recharge la liste MongoDB des utilisateurs. -->
                     <Button Content="Refresh" Classes="primary" Command="{Binding LoadUsersCommand}" />
+                    <!-- Vide le formulaire pour creer un nouveau compte. -->
                     <Button Content="New user" Command="{Binding NewUserCommand}" />
+                    <!-- Supprime l'utilisateur selectionne apres confirmation. -->
                     <Button Content="Delete" Classes="danger" Command="{Binding DeleteUserCommand}" />
                 </WrapPanel>
 
+                <!-- Liste des comptes : Users vient de MongoDB via IUserRepository. -->
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding Users}"
                          SelectedItem="{Binding SelectedUser}"
@@ -69,6 +75,7 @@
         </Border>
 
         <Border Grid.Row="1" Grid.Column="1" Classes="panel">
+            <!-- Formulaire admin : modifie SelectedUser ou cree un nouvel utilisateur. -->
             <StackPanel Spacing="10">
                 <TextBlock Text="Account" FontWeight="Bold" FontSize="18" />
                 <TextBlock Text="First name" Classes="muted" />
@@ -82,7 +89,9 @@
                 <TextBlock Text="Role" Classes="muted" />
                 <ComboBox ItemsSource="{Binding Roles}" SelectedItem="{Binding Role, Mode=TwoWay}" />
                 <TextBlock Text="Password" Classes="muted" />
+                <!-- Pour un compte existant, laisser vide garde le mot de passe actuel. -->
                 <TextBox PasswordChar="*" Text="{Binding Password, Mode=TwoWay}" Watermark="New password or leave empty" />
+                <!-- SaveUserCommand sauvegarde dans MongoDB avec hash du nouveau mot de passe si renseigne. -->
                 <Button Content="Save account" Classes="primary" Command="{Binding SaveUserCommand}" />
             </StackPanel>
         </Border>

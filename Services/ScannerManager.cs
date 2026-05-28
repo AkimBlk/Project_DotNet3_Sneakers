@@ -6,7 +6,10 @@ namespace MyProjectBase.Services;
 public interface IScannerManager : IDisposable
 {
     event EventHandler<string>? CodeReceived;
+    event EventHandler<ServiceResult>? ConnectionChanged;
     bool IsConnected { get; }
+    ServiceResult StartAutoDetection();
+    ServiceResult StopAutoDetection();
     ServiceResult OpenPort();
     ServiceResult ClosePort();
 }
@@ -14,28 +17,88 @@ public interface IScannerManager : IDisposable
 public sealed class ScannerManager : IScannerManager
 {
     private readonly IAppLogger _logger;
+
+    // Verrou utilise parce que le Timer, les evenements SerialPort et l'UI peuvent appeler ce service en meme temps.
+    private readonly object _sync = new();
+    private Timer? _autoDetectionTimer;
     private SerialPort? _serialPort;
+
+    // Buffer temporaire : un scanner peut envoyer le contenu en plusieurs petits morceaux.
     private string _buffer = string.Empty;
+    private bool _isDetecting;
+    private bool? _lastReportedConnectionState;
+    private string? _lastReportedMessage;
 
     public event EventHandler<string>? CodeReceived;
+    public event EventHandler<ServiceResult>? ConnectionChanged;
 
-    public bool IsConnected => _serialPort is { IsOpen: true };
+    public bool IsConnected
+    {
+        get
+        {
+            lock (_sync)
+                return _serialPort is { IsOpen: true };
+        }
+    }
 
     public ScannerManager(IAppLogger logger)
     {
         _logger = logger;
     }
 
+    public ServiceResult StartAutoDetection()
+    {
+        // Lance une surveillance legere : si le scanner est branche apres le demarrage, il sera connecte automatiquement.
+        lock (_sync)
+        {
+            _autoDetectionTimer ??= new Timer(AutoDetectScanner, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+        }
+
+        return ServiceResult.Ok("Automatic scanner detection started.");
+    }
+
+    public ServiceResult StopAutoDetection()
+    {
+        // Arrete uniquement la surveillance automatique, pas la logique de lecture deja recue.
+        lock (_sync)
+        {
+            _autoDetectionTimer?.Dispose();
+            _autoDetectionTimer = null;
+        }
+
+        return ServiceResult.Ok("Automatic scanner detection stopped.");
+    }
+
     public ServiceResult OpenPort()
     {
-        ClosePort();
+        // Methode publique appelee par le ViewModel quand l'utilisateur veut relancer la connexion.
+        ServiceResult result;
+
+        lock (_sync)
+        {
+            result = OpenPortLocked();
+        }
+
+        NotifyConnection(result);
+        return result;
+    }
+
+    private ServiceResult OpenPortLocked()
+    {
+        // Cette methode suppose que _sync est deja verrouille par l'appelant.
+        if (_serialPort is { IsOpen: true })
+            return ServiceResult.Ok("Scanner already connected.");
+
+        DisposePortLocked();
+        _buffer = string.Empty;
 
         var port = DetectPort();
         if (string.IsNullOrWhiteSpace(port))
-            return ServiceResult.Fail("No serial scanner detected. Check USB and Linux permissions for /dev/tty*.");
+            return ServiceResult.Unavailable("Waiting for scanner connection.");
 
         try
         {
+            // Parametres imposes par le cahier des charges pour le scanner/code-barres.
             _serialPort = new SerialPort(port)
             {
                 BaudRate = 9600,
@@ -52,28 +115,36 @@ public sealed class ScannerManager : IScannerManager
             _serialPort.ErrorReceived += ErrorHandler;
             _serialPort.Open();
 
-            return ServiceResult.Ok($"Scanner connected on {port}.");
+            return ServiceResult.Ok("Scanner detected and connected automatically.");
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.Error(ex, "Serial port permission denied.");
-            DisposePort();
+            DisposePortLocked();
             return ServiceResult.Fail("Serial port access denied. On Linux, add the user to the dialout/uucp group.");
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Scanner connection failed.");
-            DisposePort();
+            DisposePortLocked();
             return ServiceResult.Fail($"Scanner connection failed: {ex.Message}");
         }
     }
 
     public ServiceResult ClosePort()
     {
+        // Un disconnect manuel arrete aussi l'auto-detection pour ne pas reconnecter juste apres.
+        StopAutoDetection();
+
         try
         {
-            DisposePort();
-            _buffer = string.Empty;
+            lock (_sync)
+            {
+                DisposePortLocked();
+                _buffer = string.Empty;
+            }
+
+            NotifyConnection(ServiceResult.Ok("Scanner disconnected."));
             return ServiceResult.Ok("Scanner disconnected.");
         }
         catch (Exception ex)
@@ -83,42 +154,121 @@ public sealed class ScannerManager : IScannerManager
         }
     }
 
-    public void Dispose() => ClosePort();
+    public void Dispose()
+    {
+        StopAutoDetection();
+        ClosePort();
+    }
+
+    private void AutoDetectScanner(object? state)
+    {
+        // Le Timer peut se declencher alors qu'une detection precedente est encore en cours.
+        lock (_sync)
+        {
+            if (_isDetecting || _serialPort is { IsOpen: true })
+                return;
+
+            _isDetecting = true;
+        }
+
+        ServiceResult result;
+        try
+        {
+            lock (_sync)
+            {
+                result = OpenPortLocked();
+            }
+        }
+        finally
+        {
+            lock (_sync)
+                _isDetecting = false;
+        }
+
+        NotifyConnection(result);
+    }
+
+    private void NotifyConnection(ServiceResult result)
+    {
+        // Evite d'envoyer en boucle le meme message a l'interface toutes les deux secondes.
+        var connected = IsConnected;
+
+        if (_lastReportedConnectionState == connected && _lastReportedMessage == result.Message)
+            return;
+
+        _lastReportedConnectionState = connected;
+        _lastReportedMessage = result.Message;
+        ConnectionChanged?.Invoke(this, result);
+    }
 
     private static string? DetectPort()
     {
+        // Permet de forcer un port sans l'afficher dans l'interface, utile si le scanner a un nom atypique.
+        var configuredPort = Environment.GetEnvironmentVariable("SNEAKER_SCANNER_PORT");
+        if (!string.IsNullOrWhiteSpace(configuredPort))
+            return configuredPort.Trim();
+
+        if (OperatingSystem.IsLinux() && Directory.Exists("/dev"))
+        {
+            // Sur Linux, /dev/serial/by-id donne souvent un nom stable lie au peripherique USB.
+            const string byId = "/dev/serial/by-id";
+            if (Directory.Exists(byId))
+            {
+                var knownScanner = Directory.GetFiles(byId)
+                    .OrderBy(path => path)
+                    .FirstOrDefault(path =>
+                        path.Contains("20080411", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("M900", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("Barcode", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("Scanner", StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrWhiteSpace(knownScanner))
+                    return Path.GetFullPath(knownScanner);
+            }
+
+            var linuxPort = new[] { "/dev/ttyACM0", "/dev/ttyUSB0", "/dev/ttyACM1", "/dev/ttyUSB1" }
+                .FirstOrDefault(File.Exists);
+
+            if (!string.IsNullOrWhiteSpace(linuxPort))
+                return linuxPort;
+        }
+
+        if (OperatingSystem.IsMacOS() && Directory.Exists("/dev"))
+        {
+            // Sur macOS, les ports USB apparaissent souvent sous /dev/cu.* ou /dev/tty.*.
+            var macPort = Directory.GetFiles("/dev", "cu.usb*")
+                              .Concat(Directory.GetFiles("/dev", "tty.usb*"))
+                              .OrderBy(path => path)
+                              .FirstOrDefault()
+                          ?? Directory.GetFiles("/dev", "cu.*")
+                              .OrderBy(path => path)
+                              .FirstOrDefault(path =>
+                                  path.Contains("usb", StringComparison.OrdinalIgnoreCase) ||
+                                  path.Contains("serial", StringComparison.OrdinalIgnoreCase) ||
+                                  path.Contains("modem", StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(macPort))
+                return macPort;
+        }
+
         var ports = SerialPort.GetPortNames()
-            .OrderBy(p => p)
+            .Where(port => !string.IsNullOrWhiteSpace(port))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(port => port)
             .ToArray();
 
-        var preferredPort = ports.FirstOrDefault(p =>
-            p.Contains("ttyACM", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("ttyUSB", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("cu.usb", StringComparison.OrdinalIgnoreCase) ||
-            p.Contains("COM", StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(preferredPort))
-            return preferredPort;
-
-        if (!OperatingSystem.IsLinux() || !Directory.Exists("/dev"))
-            return null;
-
-        var linuxPorts = Directory.GetFiles("/dev", "ttyACM*")
-            .Concat(Directory.GetFiles("/dev", "ttyUSB*"))
-            .OrderBy(p => p)
-            .ToArray();
-
-        if (linuxPorts.Length > 0)
-            return linuxPorts[0];
-
-        const string byId = "/dev/serial/by-id";
-        return Directory.Exists(byId)
-            ? Directory.GetFiles(byId).OrderBy(p => p).FirstOrDefault()
-            : null;
+        // Dernier essai multi-plateforme fourni par System.IO.Ports.
+        return ports.FirstOrDefault(p =>
+                   p.Contains("ttyACM", StringComparison.OrdinalIgnoreCase) ||
+                   p.Contains("ttyUSB", StringComparison.OrdinalIgnoreCase) ||
+                   p.Contains("cu.usb", StringComparison.OrdinalIgnoreCase) ||
+                   p.Contains("COM", StringComparison.OrdinalIgnoreCase))
+               ?? ports.FirstOrDefault();
     }
 
     private void DataHandler(object? sender, SerialDataReceivedEventArgs e)
     {
+        // Evenement appele par SerialPort quand des caracteres sont disponibles.
         if (sender is not SerialPort serialPort)
             return;
 
@@ -131,12 +281,12 @@ public sealed class ScannerManager : IScannerManager
         catch (IOException ex)
         {
             _logger.Error(ex, "Scanner disconnected while reading.");
-            ClosePort();
+            ClosePortAfterReadError();
         }
         catch (InvalidOperationException ex)
         {
             _logger.Error(ex, "Scanner port closed while reading.");
-            ClosePort();
+            ClosePortAfterReadError();
         }
         catch (Exception ex)
         {
@@ -149,8 +299,21 @@ public sealed class ScannerManager : IScannerManager
         _logger.Info($"Serial port error received: {e.EventType}");
     }
 
+    private void ClosePortAfterReadError()
+    {
+        // Si le scanner est debranche pendant une lecture, on ferme le port pour permettre une future reconnexion.
+        lock (_sync)
+        {
+            DisposePortLocked();
+            _buffer = string.Empty;
+        }
+
+        NotifyConnection(ServiceResult.Unavailable("Scanner disconnected. Waiting for reconnection."));
+    }
+
     private IEnumerable<string> ExtractCodes()
     {
+        // Cas principal : le QR contient un JSON complet entre accolades.
         while (true)
         {
             var start = _buffer.IndexOf('{', StringComparison.Ordinal);
@@ -169,6 +332,7 @@ public sealed class ScannerManager : IScannerManager
                  _buffer.Contains('\r', StringComparison.Ordinal) ||
                  _buffer.Length > 64))
             {
+                // Cas secondaire : le scanner envoie un ID simple au lieu d'un JSON.
                 var text = _buffer.Trim();
                 _buffer = string.Empty;
 
@@ -180,8 +344,9 @@ public sealed class ScannerManager : IScannerManager
         }
     }
 
-    private void DisposePort()
+    private void DisposePortLocked()
     {
+        // Toujours se desabonner des evenements avant de detruire le port.
         if (_serialPort == null)
             return;
 

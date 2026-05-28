@@ -8,6 +8,7 @@ public static class ShoeValidator
 {
     public static IReadOnlyList<string> Validate(Shoe shoe)
     {
+        // Validation commune utilisee avant ajout, modification, import CSV et sauvegarde JSON.
         var errors = new List<string>();
 
         if (string.IsNullOrWhiteSpace(shoe.Brand))

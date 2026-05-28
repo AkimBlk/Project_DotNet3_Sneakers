@@ -9,6 +9,7 @@ namespace MyProjectBase.ViewModels;
 
 public partial class AdminUsersViewModel : ViewModelBase
 {
+    // ViewModel reserve aux admins pour lister, creer, modifier et supprimer les comptes.
     private readonly IUserRepository _userRepository;
     private readonly IDialogService _dialogService;
     private readonly IAppLogger _logger;
@@ -28,7 +29,7 @@ public partial class AdminUsersViewModel : ViewModelBase
     [ObservableProperty] private bool _isBusy;
 
     public AdminUsersViewModel()
-        : this(new BsonUserRepository(new AppLogger()), new DialogService(), new AppLogger(), string.Empty)
+        : this(new MongoUserRepository(new AppLogger()), new DialogService(), new AppLogger(), string.Empty)
     {
     }
 
@@ -42,11 +43,17 @@ public partial class AdminUsersViewModel : ViewModelBase
         _dialogService = dialogService;
         _logger = logger;
         _currentUserId = currentUserId;
-        _ = LoadUsersAsync();
+    }
+
+    public Task InitializeAsync()
+    {
+        // Chargement explicite pour eviter du travail MongoDB directement dans le constructeur.
+        return LoadUsersAsync();
     }
 
     partial void OnSelectedUserChanged(UserAccount? value)
     {
+        // Quand un utilisateur est selectionne, ses informations remplissent le formulaire d'edition.
         if (value == null)
             return;
 
@@ -61,6 +68,7 @@ public partial class AdminUsersViewModel : ViewModelBase
     [RelayCommand]
     private async Task LoadUsersAsync()
     {
+        // Recupere la liste des comptes depuis MongoDB.
         IsBusy = true;
         try
         {
@@ -89,6 +97,7 @@ public partial class AdminUsersViewModel : ViewModelBase
     [RelayCommand]
     private void NewUser()
     {
+        // Vide le formulaire pour passer en mode creation.
         SelectedUser = null;
         FirstName = string.Empty;
         LastName = string.Empty;
@@ -102,6 +111,7 @@ public partial class AdminUsersViewModel : ViewModelBase
     [RelayCommand]
     private async Task SaveUserAsync()
     {
+        // Le meme formulaire sert a creer un nouveau compte ou modifier le compte selectionne.
         var user = SelectedUser ?? new UserAccount();
         user.FirstName = FirstName;
         user.LastName = LastName;
@@ -112,6 +122,7 @@ public partial class AdminUsersViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(user.PasswordHash) && string.IsNullOrWhiteSpace(Password))
         {
+            // Un nouvel utilisateur doit avoir un mot de passe initial.
             Message = "Password is required for new users.";
             return;
         }
@@ -128,6 +139,7 @@ public partial class AdminUsersViewModel : ViewModelBase
 
             var existingIndex = Users.ToList().FindIndex(existing => existing.Id == result.Value.Id);
             if (existingIndex >= 0)
+                // Mise a jour de la ligne existante dans l'ObservableCollection affichee.
                 Users[existingIndex] = result.Value;
             else
                 Users.Add(result.Value);
@@ -145,6 +157,7 @@ public partial class AdminUsersViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteUserAsync()
     {
+        // Suppression d'un compte par l'admin avec protections minimales.
         if (SelectedUser == null)
         {
             Message = "Select a user to delete.";
@@ -153,6 +166,7 @@ public partial class AdminUsersViewModel : ViewModelBase
 
         if (SelectedUser.Id == _currentUserId)
         {
+            // Evite que l'admin connecte supprime son propre compte pendant la session.
             Message = "You cannot delete the active admin account.";
             return;
         }

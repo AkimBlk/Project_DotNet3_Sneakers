@@ -7,7 +7,7 @@ using MyProjectBase.ViewModels;
 namespace MyProjectBase;
 
 /// <summary>
-/// Given a view model, returns the corresponding view if possible.
+/// Retourne la vue correspondant au ViewModel si elle existe.
 /// </summary>
 [RequiresUnreferencedCode(
     "Default implementation of ViewLocator involves reflection which may be trimmed away.",

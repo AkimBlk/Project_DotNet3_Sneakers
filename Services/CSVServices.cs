@@ -23,9 +23,14 @@ public sealed record CsvExportOptions(bool Id, bool Brand, bool Model, bool Grou
 
 public sealed class CsvService : ICsvService
 {
+    // Colonnes supportees par l'import/export CSV de sneakers.
     private static readonly string[] KnownHeaders = ["Id", "Brand", "Model", "Group", "Stock", "Price", "ImagePath"];
+
+    // Brand et Model sont obligatoires car une sneaker sans marque/modele n'est pas exploitable.
     private static readonly string[] RequiredImportHeaders = ["Brand", "Model"];
     private readonly IAppLogger _logger;
+
+    // CsvRow garde le numero de ligne pour afficher une erreur utile a l'utilisateur.
     private sealed record CsvRow(int LineNumber, List<string> Values, string? Error);
 
     public CsvService(IAppLogger logger)
@@ -35,6 +40,7 @@ public sealed class CsvService : ICsvService
 
     public async Task<ServiceResult<List<Shoe>>> LoadDataAsync(CancellationToken cancellationToken = default)
     {
+        // Ouvre le selecteur de fichier Avalonia pour choisir un CSV local.
         var topLevel = GetTopLevel();
         if (topLevel == null)
             return ServiceResult<List<Shoe>>.Fail("Main window unavailable for opening the CSV file.");
@@ -58,6 +64,7 @@ public sealed class CsvService : ICsvService
             await using var stream = await files[0].OpenReadAsync();
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             var csv = await reader.ReadToEndAsync(cancellationToken);
+            // Le parsing est separe pour pouvoir valider le contenu avant de l'ajouter a la collection.
             return Parse(csv);
         }
         catch (Exception ex)
@@ -69,6 +76,7 @@ public sealed class CsvService : ICsvService
 
     public async Task<ServiceResult> SaveDataAsync(IEnumerable<Shoe> data, CsvExportOptions options, CancellationToken cancellationToken = default)
     {
+        // Export local demande par le cahier des charges, avec choix des colonnes via CsvExportOptions.
         var topLevel = GetTopLevel();
         if (topLevel == null)
             return ServiceResult.Fail("Main window unavailable for exporting the CSV file.");
@@ -88,6 +96,7 @@ public sealed class CsvService : ICsvService
             if (file == null)
                 return ServiceResult.Ok("CSV export canceled.");
 
+            // Le CSV est genere en memoire puis ecrit dans le fichier choisi par l'utilisateur.
             var csv = Serialize(data, options);
             await using var stream = await file.OpenWriteAsync();
             await using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
@@ -104,6 +113,7 @@ public sealed class CsvService : ICsvService
 
     private static ServiceResult<List<Shoe>> Parse(string csv)
     {
+        // Parse valide toute la structure du fichier avant de retourner les sneakers importees.
         if (string.IsNullOrWhiteSpace(csv))
             return ServiceResult<List<Shoe>>.Fail("The CSV file is empty.");
 
@@ -127,6 +137,7 @@ public sealed class CsvService : ICsvService
         if (headers.Any(string.IsNullOrWhiteSpace))
             return ServiceResult<List<Shoe>>.Fail("Corrupted CSV: header contains an empty column.");
 
+        // Les doublons de colonnes rendent l'import ambigu, donc ils sont refuses.
         if (headers.Count != headers.Distinct(StringComparer.OrdinalIgnoreCase).Count())
             return ServiceResult<List<Shoe>>.Fail("Corrupted CSV: duplicated columns in header.");
 
@@ -151,6 +162,8 @@ public sealed class CsvService : ICsvService
         var shoes = new List<Shoe>();
         var corruptedRows = new List<int>();
         var invalidRows = new List<string>();
+
+        // Permet de detecter deux lignes CSV avec le meme Id.
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 1; i < rows.Count; i++)
@@ -167,6 +180,7 @@ public sealed class CsvService : ICsvService
 
             var shoe = new Shoe
             {
+                // Les colonnes optionnelles absentes deviennent des valeurs par defaut.
                 Id = GetValue(headers, row, "Id"),
                 Brand = GetValue(headers, row, "Brand").Trim(),
                 Model = GetValue(headers, row, "Model").Trim(),
@@ -216,6 +230,7 @@ public sealed class CsvService : ICsvService
 
     private static string Serialize(IEnumerable<Shoe> data, CsvExportOptions options)
     {
+        // L'ordre des colonnes exportees suit les options cochees dans l'interface.
         var headers = GetExportHeaders(options).ToArray();
         var builder = new StringBuilder();
         builder.AppendLine(string.Join(';', headers));
@@ -230,6 +245,7 @@ public sealed class CsvService : ICsvService
 
     private static IEnumerable<CsvRow> ReadRows(string csv, char separator)
     {
+        // Lecture ligne par ligne pour conserver les numeros de lignes dans les messages d'erreur.
         using var reader = new StringReader(csv);
         string? line;
         var lineNumber = 0;
@@ -243,6 +259,7 @@ public sealed class CsvService : ICsvService
 
     private static char DetectSeparator(string csv)
     {
+        // Detecte automatiquement les CSV separes par point-virgule ou virgule.
         var firstLine = csv
             .Split(["\r\n", "\n"], StringSplitOptions.None)
             .FirstOrDefault(line => !string.IsNullOrWhiteSpace(line)) ?? string.Empty;
@@ -254,6 +271,7 @@ public sealed class CsvService : ICsvService
 
     private static CsvRow ParseLine(string line, char separator, int lineNumber)
     {
+        // ParseLine gere les guillemets CSV, y compris les guillemets doubles echappes.
         var values = new List<string>();
         var value = new StringBuilder();
         var inQuotes = false;
@@ -308,6 +326,7 @@ public sealed class CsvService : ICsvService
 
     private static string Escape(string value)
     {
+        // Encadre les champs qui contiennent le separateur, des guillemets ou des retours ligne.
         if (!value.Contains(';') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
             return value;
 
@@ -366,6 +385,7 @@ public sealed class CsvService : ICsvService
 
     private static TopLevel? GetTopLevel()
     {
+        // Acces au TopLevel Avalonia necessaire pour ouvrir les file pickers.
         return Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
             ? TopLevel.GetTopLevel(desktop.MainWindow)
             : null;

@@ -14,10 +14,12 @@ public interface IShoeRepository
 
 public sealed class ShoeRepository : IShoeRepository
 {
+    // ObservableCollection permet a l'interface Avalonia de se mettre a jour automatiquement.
     public ObservableCollection<Shoe> Shoes { get; } = [];
 
     public void ReplaceAll(IEnumerable<Shoe> shoes)
     {
+        // Remplace toute la collection, par exemple apres un chargement JSON distant.
         Shoes.Clear();
         foreach (var shoe in shoes)
             Shoes.Add(shoe);
@@ -25,9 +27,11 @@ public sealed class ShoeRepository : IShoeRepository
 
     public void Add(Shoe shoe)
     {
+        // Si aucun ID n'est fourni, on cree un identifiant pour garder chaque sneaker unique.
         if (string.IsNullOrWhiteSpace(shoe.Id))
             shoe.Id = Guid.NewGuid().ToString();
 
+        // Un ID existe une seule fois dans la collection.
         if (Shoes.Any(existing => existing.Id.Equals(shoe.Id, StringComparison.OrdinalIgnoreCase)))
             return;
 
@@ -36,6 +40,7 @@ public sealed class ShoeRepository : IShoeRepository
 
     public bool Remove(string id)
     {
+        // Supprime par ID pour que l'UI et les services n'aient pas besoin de garder la reference exacte.
         var shoe = FindById(id);
         return shoe != null && Shoes.Remove(shoe);
     }

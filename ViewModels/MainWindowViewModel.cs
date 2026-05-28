@@ -12,6 +12,7 @@ namespace MyProjectBase.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
+    // MainWindowViewModel coordonne la session, la navigation et les services partages.
     private readonly IShoeRepository _shoeRepository;
     private readonly IUserRepository _userRepository;
     private readonly IJsonShoeService _jsonShoeService;
@@ -54,6 +55,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IScannerManager scannerManager,
         IAppLogger logger)
     {
+        // Les dependances sont injectees pour garder le ViewModel testable et separer l'UI des services.
         _shoeRepository = shoeRepository;
         _userRepository = userRepository;
         _jsonShoeService = jsonShoeService;
@@ -63,8 +65,17 @@ public partial class MainWindowViewModel : ViewModelBase
         _logger = logger;
 
         _scannerManager.CodeReceived += ScannerCodeReceived;
+        _scannerManager.ConnectionChanged += ScannerConnectionChanged;
+        // Collection locale de depart avant connexion utilisateur ou chargement JSON distant.
         SeedDefaultCollection("Default collection loaded.");
         _currentPage = CreateCollectionViewModel();
+    }
+
+    public Task InitializeAsync()
+    {
+        // L'initialisation explicite evite de lancer un travail asynchrone lourd dans le constructeur.
+        StartScannerDetection();
+        return Task.CompletedTask;
     }
 
     public bool IsAuthenticated => CurrentUser != null;
@@ -85,11 +96,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task LoginAsync()
     {
+        // Connexion MongoDB via le repository ; le ViewModel ne verifie jamais le mot de passe lui-meme.
         IsBusy = true;
         try
         {
             var result = await _userRepository.LoginAsync(LoginEmail, LoginPassword);
-            ApplyUserResult(result);
+            await ApplyUserResultAsync(result);
         }
         finally
         {
@@ -101,11 +113,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task RegisterAsync()
     {
+        // Creation d'un compte utilisateur puis chargement de sa collection privee.
         IsBusy = true;
         try
         {
             var result = await _userRepository.RegisterAsync(RegisterEmail, RegisterDisplayName, RegisterPassword);
-            ApplyUserResult(result);
+            await ApplyUserResultAsync(result);
         }
         finally
         {
@@ -123,21 +136,28 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void GoToAdmin()
+    private async Task GoToAdminAsync()
     {
+        // Protection importante : meme si quelqu'un essaie d'appeler la commande directement, le role est reverifie ici.
         if (!IsAdmin)
         {
             StatusMessage = "Admin access required.";
             return;
         }
 
-        CurrentPage = new AdminUsersViewModel(_userRepository, _dialogService, _logger, CurrentUser!.Id);
+        // Cette ligne cree la page admin et lui donne les services necessaires pour manipuler les utilisateurs.
+        var adminPage = new AdminUsersViewModel(_userRepository, _dialogService, _logger, CurrentUser!.Id);
+
+        // CurrentPage est affiche par le TransitioningContentControl de MainWindow.axaml.
+        CurrentPage = adminPage;
+        await adminPage.InitializeAsync();
         StatusMessage = "Administration displayed.";
     }
 
     [RelayCommand]
     private void GoToDetailsFromChild(string shoeId)
     {
+        // Cette commande est appelee par le bouton Details dans CollectionView.axaml.
         var shoe = _shoeRepository.FindById(shoeId);
         if (shoe == null)
         {
@@ -145,12 +165,14 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Ici on remplace la page collection par la page details.
         CurrentPage = new CollectionDetailsViewModel(shoe, BackToMainCommand);
     }
 
     [RelayCommand]
     private void BackToMain()
     {
+        // Recree la page collection principale quand on quitte details ou admin.
         CurrentPage = CreateCollectionViewModel();
         StatusMessage = "Collection displayed.";
     }
@@ -158,7 +180,13 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void ConnectScanner()
     {
-        var result = _scannerManager.OpenPort();
+        StartScannerDetection();
+    }
+
+    private void StartScannerDetection()
+    {
+        // Demarre la detection automatique : si le scanner est branche plus tard, il sera detecte.
+        var result = _scannerManager.StartAutoDetection();
         IsScannerConnected = _scannerManager.IsConnected;
         StatusMessage = result.Message;
     }
@@ -173,6 +201,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private CollectionViewModel CreateCollectionViewModel()
     {
+        // La cle de collection change selon l'utilisateur actif : "admin" ou l'id du user.
         return new CollectionViewModel(
             GoToDetailsFromChildCommand,
             _shoeRepository,
@@ -193,13 +222,14 @@ public partial class MainWindowViewModel : ViewModelBase
         StatusMessage = message;
     }
 
-    private void ApplyUserResult(ServiceResult<UserAccount> result)
+    private async Task ApplyUserResultAsync(ServiceResult<UserAccount> result)
     {
+        // Applique une connexion/inscription reussie et charge la collection distante de ce compte.
         if (result.Success && result.Value != null)
         {
             CurrentUser = result.Value;
             CurrentPage = CreateCollectionViewModel();
-            _ = LoadActiveCollectionAsync();
+            await LoadActiveCollectionAsync();
             LoginEmail = string.Empty;
             RegisterEmail = string.Empty;
             RegisterDisplayName = string.Empty;
@@ -210,11 +240,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ScannerCodeReceived(object? sender, string raw)
     {
-        Dispatcher.UIThread.Post(async () => await HandleScanAsync(raw));
+        // Les evenements SerialPort arrivent hors thread UI : on repasse par Dispatcher avant de modifier l'interface.
+        Dispatcher.UIThread.InvokeAsync(() => HandleScanAsync(raw));
+    }
+
+    private void ScannerConnectionChanged(object? sender, ServiceResult result)
+    {
+        // Met a jour l'etat visible quand le scanner est branche ou debranche.
+        Dispatcher.UIThread.Post(() =>
+        {
+            IsScannerConnected = _scannerManager.IsConnected;
+            StatusMessage = result.Message;
+        });
     }
 
     private async Task HandleScanAsync(string raw)
     {
+        // Un scan peut etre soit un ID simple, soit un JSON complet representant une sneaker.
         if (string.IsNullOrWhiteSpace(raw))
             return;
 
@@ -223,13 +265,30 @@ public partial class MainWindowViewModel : ViewModelBase
         var existingByRawId = _shoeRepository.FindById(raw);
         if (existingByRawId != null)
         {
+            // Si l'ID existe deja dans la collection, on ouvre directement le detail.
             CurrentPage = new CollectionDetailsViewModel(existingByRawId, BackToMainCommand);
             StatusMessage = "Sneaker found from scan.";
             return;
         }
 
+        if (CurrentPage is CollectionViewModel { IsAddPanelVisible: true } collectionViewModel &&
+            !raw.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            // Si l'utilisateur est en train d'ajouter une sneaker, un ID simple remplit le champ identifier.
+            collectionViewModel.UseScannedId(raw);
+            StatusMessage = "Scanned ID copied into the add form.";
+            return;
+        }
+
+        if (!raw.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            StatusMessage = "Scanned ID not found. Open Add to use it as a new sneaker identifier.";
+            return;
+        }
+
         try
         {
+            // Si le scan est un JSON, on tente de construire une nouvelle sneaker.
             var shoe = JsonSerializer.Deserialize<Shoe>(
                 raw,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -257,6 +316,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (duplicate != null)
             {
+                // Evite les doublons si le meme QR code est scanne plusieurs fois.
                 CurrentPage = new CollectionDetailsViewModel(duplicate, BackToMainCommand);
                 StatusMessage = "Sneaker already exists.";
                 return;
@@ -265,6 +325,7 @@ public partial class MainWindowViewModel : ViewModelBase
             shoe.Picture = ImageHelper.LoadShoePicture(shoe);
             _shoeRepository.Add(shoe);
 
+            // Toute modification issue du scanner est sauvegardee dans la collection JSON de l'utilisateur actif.
             var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
             StatusMessage = saveResult.Success
                 ? $"Sneaker added from scanner: {shoe.Brand} {shoe.Model}."
@@ -284,6 +345,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task LoadActiveCollectionAsync()
     {
+        // Charge la collection JSON correspondant au compte connecte.
         if (!IsAuthenticated)
             return;
 
@@ -293,8 +355,11 @@ public partial class MainWindowViewModel : ViewModelBase
             var result = await _jsonShoeService.GetShoesAsync(ActiveCollectionKey, CancellationToken);
             if (!result.Success || result.Value == null)
             {
-                await InitializeDefaultRemoteCollectionAsync("No remote collection found; default collection is ready.");
-
+                // Une collection inexistante est initialisee ; une panne reseau est simplement affichee.
+                if (result.Kind == ServiceResultKind.NotFound)
+                    await InitializeDefaultRemoteCollectionAsync("No remote collection found; default collection is ready.");
+                else
+                    StatusMessage = result.Message;
                 return;
             }
 
@@ -324,6 +389,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task InitializeDefaultRemoteCollectionAsync(string successMessage)
     {
+        // Cree une collection de depart pour un nouvel utilisateur et tente de l'envoyer au serveur.
         SeedDefaultCollection(successMessage);
         var saveResult = await _jsonShoeService.SetShoesAsync(ActiveCollectionKey, _shoeRepository.Shoes, CancellationToken);
         if (!saveResult.Success)
@@ -336,6 +402,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
 
         _scannerManager.CodeReceived -= ScannerCodeReceived;
+        _scannerManager.ConnectionChanged -= ScannerConnectionChanged;
         _scannerManager.Dispose();
         CurrentPage.Dispose();
     }

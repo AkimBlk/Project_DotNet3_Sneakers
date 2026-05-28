@@ -14,9 +14,11 @@
         
     <Border Classes="panel" Padding="20">
         <StackPanel VerticalAlignment="Center" Spacing="20">
+            <!-- MessageText est rempli depuis DialogService pour afficher la question de confirmation. -->
             <TextBlock x:Name="MessageText" Foreground="White" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
         
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="0,10,0,0">
+                <!-- Ces boutons utilisent du code-behind simple car c'est une petite fenetre modale de confirmation. -->
                 <Button Content="Yes" Click="BtnYes_Click" Classes="primary" Padding="20,10" />
                 <Button Content="No" Click="BtnNo_Click" Padding="20,10" />
             </StackPanel>

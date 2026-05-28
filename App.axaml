@@ -3,7 +3,7 @@
              x:Class="MyProjectBase.App"
              xmlns:local="using:MyProjectBase"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             <!-- Le theme "Default" suit le theme systeme. "Dark" et "Light" restent disponibles. -->
 
     <Application.DataTemplates>
         <local:ViewLocator/>
