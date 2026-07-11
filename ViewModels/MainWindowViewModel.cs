@@ -178,6 +178,14 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ShowScanner()
+    {
+        // Cette commande affiche une page scanner separee, comme dans le projet de base.
+        CurrentPage = new ScannerViewModel(_scannerManager);
+        StatusMessage = "Scanner console displayed.";
+    }
+
+    [RelayCommand]
     private void ConnectScanner()
     {
         StartScannerDetection();

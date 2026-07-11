@@ -108,6 +108,8 @@
                         <StackPanel Spacing="8">
                             <!-- Retour a la page collection principale via BackToMainCommand. -->
                             <Button Content="Collection" Classes="primary" Command="{Binding BackToMainCommand}" />
+                            <!-- Ouvre la page ScannerView via ShowScannerCommand, sans afficher la liste des ports. -->
+                            <Button Content="Scanner" Command="{Binding ShowScannerCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
